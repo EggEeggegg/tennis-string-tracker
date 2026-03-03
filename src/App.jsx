@@ -1,7 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 
 const PRICES = [200, 300];
 const STORAGE_KEY = "tennis-tracker-data";
+const GAPI_CLIENT_ID = "752398545330-l50d1qkb3a1g35niacrter3lcrlk7vqu.apps.googleusercontent.com";
+const DRIVE_FILE_NAME = "tennis-string-tracker-backup.json";
+const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
 const uid = () => "r" + Date.now() + Math.random().toString(36).slice(2, 6);
 const now = () => new Date().toISOString();
@@ -24,6 +27,74 @@ const SAMPLE = [
   { id:"r9",date:"2025-03-05",seq:4,racket:"Tecnifibre TF40",string1:"Razor Code",string2:"X-One",price:300,note:"",createdAt:"2025-03-05T09:30:00",updatedAt:"2025-03-05T09:30:00" },
 ];
 
+// === Google Drive helpers ===
+function loadGsiScript() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts) return resolve();
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function getAccessToken() {
+  await loadGsiScript();
+  return new Promise((resolve, reject) => {
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: GAPI_CLIENT_ID,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error) reject(resp);
+        else resolve(resp.access_token);
+      },
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function findDriveFile(token) {
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name,modifiedTime)`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  return data.files?.[0] || null;
+}
+
+async function downloadDriveFile(token, fileId) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
+async function uploadDriveFile(token, records, existingFileId) {
+  const metadata = { name: DRIVE_FILE_NAME, mimeType: "application/json" };
+  const body = JSON.stringify({ records, savedAt: now() }, null, 2);
+
+  if (existingFileId) {
+    const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body,
+    });
+    return res.json();
+  } else {
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+    form.append("file", new Blob([body], { type: "application/json" }));
+    const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    return res.json();
+  }
+}
+
+// === useStore hook ===
 function useStore(fallback) {
   const [data, setData] = useState(() => {
     try {
@@ -48,8 +119,100 @@ export default function App() {
   const [fEnd, setFEnd] = useState(today());
   const [toast, setToast] = useState(null);
   const [delId, setDelId] = useState(null);
+  // Google Drive state
+  const [gToken, setGToken] = useState(null);
+  const [gFileId, setGFileId] = useState(null);
+  const [gSyncing, setGSyncing] = useState(false);
+  const [gUser, setGUser] = useState(null);
+  const [gLastSync, setGLastSync] = useState(null);
+  const syncTimer = useRef(null);
 
   useEffect(() => { if(toast){const t=setTimeout(()=>setToast(null),2200);return()=>clearTimeout(t);} }, [toast]);
+  const showToast = (msg, t="s") => setToast({msg,t});
+
+  // Auto-sync to Drive when records change (debounced)
+  useEffect(() => {
+    if (!gToken) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      syncToDrive(records);
+    }, 3000);
+    return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
+  }, [records, gToken]);
+
+  const syncToDrive = async (data) => {
+    if (!gToken) return;
+    setGSyncing(true);
+    try {
+      const result = await uploadDriveFile(gToken, data, gFileId);
+      if (result.id) setGFileId(result.id);
+      setGLastSync(now());
+    } catch (e) {
+      console.error("Drive sync failed:", e);
+    }
+    setGSyncing(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      showToast("กำลังเชื่อมต่อ Google...", "s");
+      const token = await getAccessToken();
+      setGToken(token);
+      // Try to find existing file
+      const file = await findDriveFile(token);
+      if (file) {
+        setGFileId(file.id);
+        // Ask user if they want to load from Drive
+        const driveData = await downloadDriveFile(token, file.id);
+        if (driveData.records && driveData.records.length > 0) {
+          if (driveData.records.length >= records.length) {
+            setRecords(driveData.records);
+            showToast("โหลดข้อมูลจาก Drive สำเร็จ ✓", "s");
+          } else {
+            // Local has more data, upload to drive
+            await uploadDriveFile(token, records, file.id);
+            showToast("Sync ข้อมูลขึ้น Drive สำเร็จ ✓", "s");
+          }
+        }
+      } else {
+        // No file yet, create one
+        const result = await uploadDriveFile(token, records, null);
+        setGFileId(result.id);
+        showToast("สร้างไฟล์ backup บน Drive สำเร็จ ✓", "s");
+      }
+      setGLastSync(now());
+      setGUser(true);
+    } catch (e) {
+      console.error("Google login failed:", e);
+      showToast("เชื่อมต่อ Google ไม่สำเร็จ", "e");
+    }
+  };
+
+  const handleForceSync = async () => {
+    if (!gToken) return;
+    setGSyncing(true);
+    try {
+      await uploadDriveFile(gToken, records, gFileId);
+      setGLastSync(now());
+      showToast("Sync สำเร็จ ✓", "s");
+    } catch {
+      showToast("Sync ไม่สำเร็จ", "e");
+    }
+    setGSyncing(false);
+  };
+
+  const handleForceLoad = async () => {
+    if (!gToken || !gFileId) return;
+    try {
+      const driveData = await downloadDriveFile(gToken, gFileId);
+      if (driveData.records) {
+        setRecords(driveData.records);
+        showToast("โหลดข้อมูลจาก Drive สำเร็จ ✓", "s");
+      }
+    } catch {
+      showToast("โหลดไม่สำเร็จ", "e");
+    }
+  };
 
   const dayRecs = useMemo(() => records.filter(r => r.date===selDate).sort((a,b)=>a.seq-b.seq), [records,selDate]);
   const allDates = useMemo(() => [...new Set(records.map(r=>r.date))].sort().reverse(), [records]);
@@ -58,23 +221,23 @@ export default function App() {
   const reset = () => { setForm({racket:"",string1:"",string2:"",price:200,note:""}); setEditId(null); setShowForm(false); };
 
   const addRec = () => {
-    if(!form.racket.trim()) { setToast({msg:"กรุณากรอกชื่อไม้",t:"e"}); return; }
+    if(!form.racket.trim()) { showToast("กรุณากรอกชื่อไม้","e"); return; }
     const n=now(); setRecords(p=>[...p,{id:uid(),date:selDate,seq:dayRecs.length+1,...form,createdAt:n,updatedAt:n}]);
-    reset(); setToast({msg:"เพิ่มสำเร็จ ✓",t:"s"});
+    reset(); showToast("เพิ่มสำเร็จ ✓");
   };
 
   const startEdit = r => { setEditId(r.id); setForm({racket:r.racket,string1:r.string1,string2:r.string2,price:r.price,note:r.note}); setShowForm(true); };
 
   const saveEdit = () => {
     setRecords(p=>p.map(r=>r.id===editId?{...r,...form,updatedAt:now()}:r));
-    reset(); setToast({msg:"แก้ไขสำเร็จ — updatedAt อัพเดทแล้ว ✓",t:"s"});
+    reset(); showToast("แก้ไขสำเร็จ — updatedAt อัพเดทแล้ว ✓");
   };
 
   const doDel = () => {
     if(!delId) return;
     const dd=records.find(r=>r.id===delId)?.date;
     setRecords(p=>{const u=p.filter(r=>r.id!==delId);let s=1;return u.map(r=>r.date===dd?{...r,seq:s++}:r);});
-    setDelId(null); setToast({msg:"ลบแล้ว",t:"w"});
+    setDelId(null); showToast("ลบแล้ว","w");
   };
 
   const dailySum = useMemo(()=>{const m={};records.forEach(r=>{if(!m[r.date])m[r.date]={date:r.date,count:0,total:0};m[r.date].count++;m[r.date].total+=r.price;});return Object.values(m).sort((a,b)=>b.date.localeCompare(a.date));},[records]);
@@ -93,6 +256,7 @@ export default function App() {
         @keyframes fi{from{opacity:0}to{opacity:1}}
         @keyframes pop{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
         @keyframes ts{from{opacity:0;transform:translate(-50%,-16px)}to{opacity:1;transform:translate(-50%,0)}}
+        @keyframes spin{to{transform:rotate(360deg)}}
         .cd{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:16px;animation:up .3s ease}
         .inp{width:100%;padding:12px 14px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;color:#e2e8f0;font-size:16px;outline:none;transition:border .2s,box-shadow .2s}
         .inp:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
@@ -118,6 +282,7 @@ export default function App() {
         .rc:active{background:rgba(255,255,255,.05)}
         .st{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px;flex:1;min-width:0}
         .sg{font-family:'Space Grotesk',monospace;font-weight:700}
+        .gsync{display:inline-block;width:12px;height:12px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
       `}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:300,animation:"ts .25s ease",padding:"10px 22px",borderRadius:12,background:TC,color:"#fff",fontWeight:700,fontSize:14,boxShadow:"0 8px 32px rgba(0,0,0,.4)",whiteSpace:"nowrap"}}>{toast.msg}</div>}
@@ -152,10 +317,35 @@ export default function App() {
       </div></div>}
 
       <div style={{maxWidth:480,margin:"0 auto",padding:"16px 12px"}}>
-        <div style={{textAlign:"center",padding:"8px 0 14px"}}>
+        {/* Header with Google Drive status */}
+        <div style={{textAlign:"center",padding:"8px 0 6px"}}>
           <div style={{fontSize:28}}>🎾</div>
           <h1 className="sg" style={{fontSize:22,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>String Tracker</h1>
           <p style={{color:"#374560",fontSize:12}}>บันทึกการขึ้นเอ็นเทนนิส</p>
+        </div>
+
+        {/* Google Drive Sync Bar */}
+        <div className="cd" style={{marginBottom:14,padding:"10px 14px"}}>
+          {!gUser ? (
+            <button className="bt" onClick={handleGoogleLogin} style={{width:"100%",padding:"10px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,color:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:14}}>
+              <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+              เชื่อมต่อ Google Drive
+            </button>
+          ) : (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {gSyncing ? <span className="gsync"/> : <span style={{color:"#22c55e",fontSize:14}}>●</span>}
+                <span style={{fontSize:12,color:gSyncing?"#f59e0b":"#22c55e",fontWeight:600}}>
+                  {gSyncing ? "กำลัง sync..." : "Google Drive เชื่อมต่อแล้ว"}
+                </span>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button className="bt bo" style={{padding:"6px 10px",fontSize:11,borderRadius:8}} onClick={handleForceLoad} title="โหลดจาก Drive">⬇️</button>
+                <button className="bt bo" style={{padding:"6px 10px",fontSize:11,borderRadius:8}} onClick={handleForceSync} title="Sync ขึ้น Drive">⬆️</button>
+              </div>
+            </div>
+          )}
+          {gLastSync && <div style={{fontSize:10,color:"#3b4f6f",marginTop:6,textAlign:"center"}}>sync ล่าสุด: {fmtDateTime(gLastSync)}</div>}
         </div>
 
         {tab==="daily"&&<div style={{animation:"fi .25s"}}>
