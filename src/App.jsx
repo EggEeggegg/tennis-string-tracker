@@ -24,8 +24,6 @@ const SAMPLE = [
   { id:"r9",date:"2025-03-05",seq:4,racket:"Tecnifibre TF40",string1:"Razor Code",string2:"X-One",price:300,note:"",createdAt:"2025-03-05T09:30:00",updatedAt:"2025-03-05T09:30:00" },
 ];
 
-const STORAGE_KEY = "tennis-tracker-data";
-
 function useStore(fallback) {
   const [data, setData] = useState(() => {
     try {
