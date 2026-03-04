@@ -1,25 +1,54 @@
-# Tennis String Tracker
+# Tennis String Tracker — Full-Stack
 
-PWA app for tracking tennis racket stringing jobs.
+ระบบบันทึกการขึ้นเอ็นเทนนิส พร้อมระบบ user และ admin dashboard
 
-## Features
-- Daily log with date selection
-- Track racket name, main/cross strings, price (200/300)
-- updatedAt auto-updates on edit
-- Daily & monthly summaries
-- Date range filter
-- Offline-capable PWA
-- Data persists in localStorage
+## Quick Start
 
-## Deploy to Vercel
+### 1. Database (Neon.tech)
+- สมัคร https://neon.tech (ฟรี)
+- สร้าง database ใหม่
+- copy connection string
 
-1. Push to GitHub
-2. Go to vercel.com > New Project > Import your repo
-3. Framework: Vite > Deploy
-
-## Dev
-
+### 2. Backend
 ```bash
+cd backend
+cp .env.example .env
+# แก้ไข .env ใส่ DATABASE_URL และ JWT_SECRET
+
+npm install
+npm run db:init    # สร้างตาราง + seed admin
+npm run dev        # start dev server
+```
+
+### 3. Frontend
+```bash
+cd frontend
 npm install
 npm run dev
+```
+
+### 4. Deploy
+- Frontend → Vercel (เหมือนเดิม)
+- Backend → Railway / Render
+- Database → Neon.tech
+
+## Default Admin
+- Username: `admin`
+- Password: `admin123`
+- เปลี่ยนรหัสผ่านหลัง login ครั้งแรก!
+
+## Project Structure
+```
+├── CLAUDE.md          ← Context สำหรับ Claude Code
+├── docs/              ← Architecture docs
+├── backend/           ← Node.js + Express API
+│   └── src/
+│       ├── index.js
+│       ├── config/db.js
+│       ├── middleware/auth.js
+│       ├── routes/auth.js
+│       ├── routes/records.js
+│       └── routes/admin.js
+└── frontend/          ← React + Vite (existing)
+    └── src/App.jsx
 ```
