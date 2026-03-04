@@ -2,53 +2,146 @@
 
 ระบบบันทึกการขึ้นเอ็นเทนนิส พร้อมระบบ user และ admin dashboard
 
+## Tech Stack
+
+| Layer    | Technology                        |
+|----------|-----------------------------------|
+| Frontend | Next.js 14 (App Router, TypeScript, Tailwind CSS) |
+| Backend  | Go 1.22 + Gin + GORM              |
+| Database | PostgreSQL (Neon.tech)            |
+| Auth     | JWT (HS256) + bcrypt              |
+
 ## Quick Start
 
-### 1. Database (Neon.tech)
-- สมัคร https://neon.tech (ฟรี)
-- สร้าง database ใหม่
-- copy connection string
+### Prerequisites
+- Go 1.22+
+- Node.js 20+
+- PostgreSQL database (สมัคร [Neon.tech](https://neon.tech) ฟรี)
+
+### 1. Database
+
+สมัคร Neon.tech → สร้าง database → copy connection string
+
+รัน migration:
+```bash
+psql "$DATABASE_URL" -f backend/migrations/001_init.sql
+```
 
 ### 2. Backend
+
 ```bash
 cd backend
 cp .env.example .env
 # แก้ไข .env ใส่ DATABASE_URL และ JWT_SECRET
 
-npm install
-npm run db:init    # สร้างตาราง + seed admin
-npm run dev        # start dev server
+go mod download
+go run ./cmd/seed    # สร้าง admin user
+go run ./cmd/server  # start dev server (port 8080)
+```
+
+หรือใช้ Makefile:
+```bash
+make seed
+make run
 ```
 
 ### 3. Frontend
+
 ```bash
 cd frontend
+cp .env.example .env.local
+# แก้ไข NEXT_PUBLIC_API_URL ถ้า backend ไม่ได้รันที่ localhost:8080
+
 npm install
-npm run dev
+npm run dev  # start dev server (port 3000)
 ```
 
 ### 4. Deploy
-- Frontend → Vercel (เหมือนเดิม)
-- Backend → Railway / Render
-- Database → Neon.tech
+
+| Service  | Platform              |
+|----------|-----------------------|
+| Frontend | Vercel                |
+| Backend  | Railway / Render      |
+| Database | Neon.tech             |
 
 ## Default Admin
+
 - Username: `admin`
 - Password: `admin123`
-- เปลี่ยนรหัสผ่านหลัง login ครั้งแรก!
+- **เปลี่ยนรหัสผ่านหลัง login ครั้งแรก!**
+
+## API Endpoints
+
+### Auth
+| Method | Path                        | Auth | Description              |
+|--------|-----------------------------|------|--------------------------|
+| POST   | /api/auth/login             | -    | Login, รับ JWT token     |
+| GET    | /api/auth/me                | JWT  | ข้อมูล user ปัจจุบัน    |
+| POST   | /api/auth/change-password   | JWT  | เปลี่ยนรหัสผ่าน         |
+
+### Records
+| Method | Path                        | Auth | Description              |
+|--------|-----------------------------|------|--------------------------|
+| GET    | /api/records                | JWT  | ดึง records (filter ได้) |
+| POST   | /api/records                | JWT  | สร้าง record ใหม่        |
+| PUT    | /api/records/:id            | JWT  | แก้ไข record             |
+| DELETE | /api/records/:id            | JWT  | ลบ record                |
+| GET    | /api/records/summary/daily  | JWT  | สรุปรายวัน              |
+| GET    | /api/records/summary/monthly| JWT  | สรุปรายเดือน            |
+
+### Admin
+| Method | Path                | Auth       | Description         |
+|--------|---------------------|------------|---------------------|
+| GET    | /api/admin/users    | JWT+Admin  | ดู user ทั้งหมด    |
+| POST   | /api/admin/users    | JWT+Admin  | สร้าง user ใหม่    |
+| PUT    | /api/admin/users/:id| JWT+Admin  | แก้ไข / toggle user |
+| DELETE | /api/admin/users/:id| JWT+Admin  | ลบ user             |
+| GET    | /api/admin/report   | JWT+Admin  | Report รวมทุก user  |
 
 ## Project Structure
+
 ```
-├── CLAUDE.md          ← Context สำหรับ Claude Code
-├── docs/              ← Architecture docs
-├── backend/           ← Node.js + Express API
-│   └── src/
-│       ├── index.js
-│       ├── config/db.js
-│       ├── middleware/auth.js
-│       ├── routes/auth.js
-│       ├── routes/records.js
-│       └── routes/admin.js
-└── frontend/          ← React + Vite (existing)
-    └── src/App.jsx
+tennis-tracker/
+├── backend/
+│   ├── cmd/
+│   │   ├── server/main.go     ← entry point (HTTP server)
+│   │   └── seed/main.go       ← seed admin user
+│   ├── internal/
+│   │   ├── config/config.go   ← env config
+│   │   ├── database/          ← GORM connection
+│   │   ├── handler/           ← HTTP handlers (auth, records, admin)
+│   │   ├── middleware/        ← JWT auth, admin-only
+│   │   ├── model/             ← GORM models (User, Record)
+│   │   └── router/router.go   ← Gin router setup
+│   ├── migrations/
+│   │   └── 001_init.sql       ← DB schema
+│   ├── go.mod
+│   ├── Makefile
+│   └── .env.example
+└── frontend/
+    ├── src/
+    │   ├── app/               ← Next.js App Router pages
+    │   │   ├── login/         ← หน้า login
+    │   │   └── (dashboard)/   ← daily, summary, monthly, filter, admin
+    │   ├── components/        ← Toast, ConfirmDialog, RecordForm, etc.
+    │   ├── lib/               ← api client, utils
+    │   └── types/             ← TypeScript types
+    ├── next.config.ts
+    └── .env.example
+```
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+```env
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+JWT_SECRET=your-secret-key-here
+PORT=8080
+GIN_MODE=debug
+CORS_ORIGIN=http://localhost:3000
+```
+
+### Frontend (`frontend/.env.local`)
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080
 ```

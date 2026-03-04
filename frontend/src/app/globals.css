@@ -1,0 +1,158 @@
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-[#0b0f1a] text-[#e2e8f0];
+    font-family: 'Sarabun', -apple-system, sans-serif;
+    min-height: 100dvh;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: 16px; /* prevent iOS zoom */
+  }
+}
+
+@layer components {
+  /* ── Cards ─────────────────────────────── */
+  .card {
+    @apply rounded-[16px] border border-white/[0.07] bg-white/[0.035] p-4;
+  }
+
+  .record-item {
+    @apply rounded-[14px] border border-white/[0.06] bg-white/[0.025] p-[14px] mb-2
+           transition-colors active:bg-white/[0.05];
+  }
+
+  .stat-card {
+    @apply rounded-[14px] border border-white/[0.07] bg-white/[0.035] p-[14px] flex-1 min-w-0;
+  }
+
+  /* ── Inputs ────────────────────────────── */
+  .inp {
+    @apply w-full px-[14px] py-3 rounded-[12px]
+           bg-white/[0.06] border-[1.5px] border-white/10
+           text-[#e2e8f0] text-base outline-none
+           transition-[border,box-shadow] duration-200
+           placeholder:text-[#3b4f6f]
+           focus:border-[#3b82f6] focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)];
+  }
+
+  /* ── Buttons ───────────────────────────── */
+  .btn {
+    @apply px-5 py-3 rounded-[12px] border-none cursor-pointer
+           font-bold text-[15px] transition-all duration-150
+           active:scale-95 touch-manipulation;
+    font-family: inherit;
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white;
+  }
+
+  .btn-success {
+    @apply btn bg-gradient-to-br from-[#22c55e] to-[#16a34a] text-white;
+  }
+
+  .btn-ghost {
+    @apply btn bg-white/[0.06] text-[#94a3b8] border border-white/10;
+  }
+
+  .btn-danger {
+    @apply btn bg-[rgba(239,68,68,0.12)] text-[#f87171];
+  }
+
+  /* ── Chips ─────────────────────────────── */
+  .chip {
+    @apply px-[14px] py-2 rounded-[20px] text-[13px] font-semibold
+           cursor-pointer transition-all duration-200 whitespace-nowrap
+           border-[1.5px] border-transparent touch-manipulation;
+  }
+
+  .chip-active {
+    @apply chip bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white border-[#3b82f6];
+  }
+
+  .chip-inactive {
+    @apply chip bg-white/[0.04] text-[#4b5e7a] border-white/[0.08]
+           active:bg-white/[0.08];
+  }
+
+  /* ── Bottom nav ────────────────────────── */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0
+           bg-[rgba(11,15,26,0.95)] backdrop-blur-xl
+           border-t border-white/[0.06]
+           flex z-50;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .nav-item {
+    @apply flex-1 flex flex-col items-center py-[6px]
+           cursor-pointer transition-colors touch-manipulation;
+  }
+
+  /* ── Modal overlay ─────────────────────── */
+  .overlay {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]
+           flex items-end justify-center;
+    animation: fadeIn 0.15s ease;
+  }
+
+  .modal {
+    @apply bg-[#151c2c] border border-white/10 w-full max-w-lg
+           overflow-y-auto;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+    max-height: 90dvh;
+    animation: slideUp 0.25s ease;
+  }
+
+  /* ── FAB ───────────────────────────────── */
+  .fab {
+    @apply fixed bottom-[76px] right-4 w-14 h-14 rounded-full
+           bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white
+           flex items-center justify-center text-[28px] border-none
+           cursor-pointer z-[90]
+           shadow-[0_4px_24px_rgba(59,130,246,0.4)]
+           active:scale-90 touch-manipulation;
+  }
+
+  /* ── Number display ────────────────────── */
+  .num {
+    font-family: 'Space Grotesk', monospace;
+    font-weight: 700;
+  }
+
+  .badge-edited {
+    @apply text-[10px] text-[#f59e0b] bg-[rgba(245,158,11,0.12)]
+           px-2 py-[2px] rounded-[6px] inline-block mt-[3px];
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, -16px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.animate-toast { animation: toastIn 0.25s ease; }
