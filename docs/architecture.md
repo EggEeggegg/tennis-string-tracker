@@ -3,133 +3,165 @@
 ## ภาพรวมระบบ
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend (React)                  │
-│                  Vercel (เหมือนเดิม)                  │
-├──────────────────┬──────────────────────────────────┤
-│   User App       │        Admin Dashboard           │
-│  - บันทึกรายการ     │  - ดู report รวมทุก user          │
-│  - สรุปรายวัน/เดือน  │  - จัดการ user (เพิ่ม/ลบ)         │
-│  - Filter        │  - Export Excel/PDF              │
-└────────┬─────────┴──────────┬───────────────────────┘
-         │     API calls       │
-         ▼                     ▼
-┌─────────────────────────────────────────────────────┐
-│              Backend API (Node.js + Express)         │
-│                    Railway / Render                   │
-├─────────────────────────────────────────────────────┤
-│  POST /api/auth/login                               │
-│  GET  /api/records        (user's own records)      │
-│  POST /api/records        (create)                  │
-│  PUT  /api/records/:id    (update → updatedAt)      │
-│  DEL  /api/records/:id    (delete)                  │
-│  GET  /api/admin/report   (admin only)              │
-│  GET  /api/admin/users    (admin only)              │
-│  POST /api/admin/users    (admin creates user)      │
-│  GET  /api/admin/export   (Excel/PDF)               │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│              PostgreSQL Database                     │
-│              Railway / Supabase / Neon               │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  users                                              │
-│  ├── id          UUID PK                            │
-│  ├── username    VARCHAR UNIQUE                     │
-│  ├── password    VARCHAR (hashed)                   │
-│  ├── name        VARCHAR                            │
-│  ├── role        ENUM('admin','user')               │
-│  ├── is_active   BOOLEAN DEFAULT true               │
-│  ├── created_at  TIMESTAMP                          │
-│  └── updated_at  TIMESTAMP                          │
-│                                                     │
-│  records                                            │
-│  ├── id          UUID PK                            │
-│  ├── user_id     UUID FK → users.id                 │
-│  ├── date        DATE                               │
-│  ├── seq         INTEGER                            │
-│  ├── racket      VARCHAR                            │
-│  ├── string1     VARCHAR                            │
-│  ├── string2     VARCHAR                            │
-│  ├── price       INTEGER (200 or 300)               │
-│  ├── note        TEXT                               │
-│  ├── created_at  TIMESTAMP                          │
-│  └── updated_at  TIMESTAMP                          │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Frontend (Next.js 14)                      │
+│                      Vercel                                   │
+├──────────────────────┬──────────────────────────────────────┤
+│      User App        │         Admin Dashboard               │
+│  - บันทึกรายการ         │  - รายงานรวมทุก user                  │
+│  - สรุปรายวัน/เดือน     │  - จัดการ user (เพิ่ม/แก้ไข/ลบ/ban)   │
+│  - Filter ช่วงวันที่    │  - Export Excel/PDF (Phase 3)         │
+└──────────┬───────────┴──────────────┬────────────────────────┘
+           │    /api/* → proxy        │
+           ▼                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Backend API (Go + Gin)                      │
+│                    Railway / Render                           │
+├─────────────────────────────────────────────────────────────┤
+│  Auth                                                        │
+│    POST /api/auth/login                                      │
+│    GET  /api/auth/me                                         │
+│    POST /api/auth/change-password                            │
+│                                                              │
+│  Records  (ต้อง auth — เห็นเฉพาะของตัวเอง)                    │
+│    GET    /api/records?date=YYYY-MM-DD                       │
+│    GET    /api/records?start=&end=                           │
+│    GET    /api/records/summary/daily?start=&end=             │
+│    GET    /api/records/summary/monthly?year=                 │
+│    POST   /api/records                                       │
+│    PUT    /api/records/:id                                   │
+│    DELETE /api/records/:id                                   │
+│                                                              │
+│  Admin  (ต้อง auth + role=admin)                              │
+│    GET    /api/admin/users                                   │
+│    POST   /api/admin/users                                   │
+│    PUT    /api/admin/users/:id                               │
+│    DELETE /api/admin/users/:id                               │
+│    GET    /api/admin/report?start=&end=&user_id=             │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   PostgreSQL Database                        │
+│                       Neon.tech                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  users                                                       │
+│  ├── id          UUID PK (gen_random_uuid())                 │
+│  ├── username    VARCHAR UNIQUE NOT NULL                     │
+│  ├── password    VARCHAR NOT NULL (bcrypt cost=12)           │
+│  ├── name        VARCHAR NOT NULL                            │
+│  ├── role        VARCHAR DEFAULT 'user' ('admin' | 'user')   │
+│  ├── is_active   BOOLEAN DEFAULT true                        │
+│  ├── created_at  TIMESTAMPTZ DEFAULT now()                   │
+│  └── updated_at  TIMESTAMPTZ (auto-update via trigger)       │
+│                                                              │
+│  records                                                     │
+│  ├── id          UUID PK (gen_random_uuid())                 │
+│  ├── user_id     UUID FK → users.id ON DELETE CASCADE        │
+│  ├── date        DATE NOT NULL                               │
+│  ├── seq         INTEGER NOT NULL                            │
+│  ├── type        VARCHAR DEFAULT 'string' ('string'|'sale')  │
+│  ├── racket      VARCHAR                                     │
+│  ├── string1     VARCHAR                                     │
+│  ├── string2     VARCHAR                                     │
+│  ├── price       INTEGER CHECK (price IN (200, 300))         │
+│  ├── note        TEXT                                        │
+│  ├── created_at  TIMESTAMPTZ DEFAULT now()                   │
+│  └── updated_at  TIMESTAMPTZ (auto-update via trigger)       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
 
-| Layer      | Technology           | Hosting          | Cost    |
-|------------|---------------------|------------------|---------|
-| Frontend   | React + Vite        | Vercel           | ฟรี     |
-| Backend    | Node.js + Express   | Railway / Render | ฟรี*    |
-| Database   | PostgreSQL          | Railway / Neon   | ฟรี*    |
-| Auth       | JWT (jsonwebtoken)  | —                | —       |
-
-> *Railway free tier: 500 hours/month, Neon free: 0.5GB storage
+| Layer    | Technology                        | Hosting        |
+|----------|-----------------------------------|----------------|
+| Frontend | Next.js 14 App Router + TypeScript + Tailwind CSS | Vercel |
+| Backend  | Go 1.22 + Gin + pgx/v5            | Railway/Render |
+| Database | PostgreSQL                        | Neon.tech      |
+| Auth     | JWT (golang-jwt/jwt/v5) + bcrypt (cost 12) | —       |
 
 ## User Flow
 
-### สำหรับ Admin
-1. Login ด้วย admin account
-2. เพิ่ม user ใหม่ (ตั้ง username + password ให้)
-3. ดู dashboard report รวม — รายได้ทั้งหมด, แยกตาม user, แยกตามวัน/เดือน
-4. Export report เป็น Excel หรือ PDF
-5. เปิด/ปิดการใช้งานของ user
+### Admin
+1. Login ด้วย admin account (default: `admin` / `admin123`)
+2. เพิ่ม user ใหม่ + ตั้ง username/password
+3. ดู report รวม — รายได้ทั้งหมด, แยกตาม user
+4. Ban/Unban, แก้ไข, หรือลบ user
+5. Export Excel/PDF *(Phase 3)*
 
-### สำหรับ User ทั่วไป
-1. ได้รับ username + password จาก admin
-2. Login แล้วเห็นเฉพาะข้อมูลตัวเอง
-3. บันทึก/แก้ไข/ลบรายการขึ้นเอ็น (เหมือนเดิม)
-4. ดูสรุปรายวัน/รายเดือน/filter ของตัวเอง
+### User ทั่วไป
+1. รับ username + password จาก admin
+2. Login → เห็นเฉพาะข้อมูลตัวเอง
+3. บันทึก/แก้ไข/ลบรายการขึ้นเอ็น (ราคา 200 หรือ 300)
+4. ดูสรุปรายวัน / รายเดือน / filter ช่วงวันที่
 
-## API Endpoints
+## โครงสร้างไฟล์สำคัญ
 
-### Auth
-- `POST /api/auth/login` — { username, password } → { token, user }
+```
+tennis-tracker/
+├── backend/
+│   ├── cmd/server/main.go          ← entry point + graceful shutdown
+│   ├── cmd/seed/main.go            ← สร้าง admin user
+│   ├── internal/
+│   │   ├── config/config.go        ← env vars
+│   │   ├── database/database.go    ← pgxpool connection
+│   │   ├── middleware/auth.go      ← JWT middleware, Claims struct
+│   │   ├── model/                  ← User, Record structs
+│   │   ├── handler/                ← auth, records, admin handlers
+│   │   └── router/router.go        ← Gin routes + CORS
+│   └── migrations/
+│       ├── 001_init.sql            ← schema + triggers
+│       └── 002_add_record_type.sql ← เพิ่ม type column
+│
+└── frontend/src/
+    ├── app/
+    │   ├── login/page.tsx
+    │   └── (dashboard)/
+    │       ├── layout.tsx          ← auth guard + NavBar
+    │       ├── daily/page.tsx      ← บันทึกรายวัน (main)
+    │       ├── summary/page.tsx    ← สรุปรายวัน
+    │       └── admin/page.tsx      ← admin dashboard
+    ├── components/
+    │   ├── NavBar.tsx, RecordCard.tsx, RecordForm.tsx
+    │   ├── Toast.tsx, ConfirmDialog.tsx
+    └── lib/
+        ├── api.ts                  ← authApi, recordsApi, adminApi
+        └── utils.ts                ← fmtDate, fmtMoney, token helpers
+```
 
-### Records (ต้อง login)
-- `GET /api/records?date=2025-03-01` — ดึงรายการของ user ตาม filter
-- `POST /api/records` — เพิ่มรายการ
-- `PUT /api/records/:id` — แก้ไข (auto update updatedAt)
-- `DELETE /api/records/:id` — ลบ
+## Environment Variables
 
-### Admin (ต้อง login + role=admin)
-- `GET /api/admin/users` — list users ทั้งหมด
-- `POST /api/admin/users` — สร้าง user ใหม่
-- `PUT /api/admin/users/:id` — แก้ไข user / เปิดปิด
-- `GET /api/admin/report?start=&end=` — report รวม
-- `GET /api/admin/export?format=excel&start=&end=` — export
+### backend/.env
+```
+DATABASE_URL=postgresql://user:pass@host:5432/tennis_tracker?sslmode=require
+JWT_SECRET=strong-random-secret-at-least-32-chars
+PORT=8080
+CORS_ORIGIN=https://your-app.vercel.app
+GIN_MODE=release
+```
 
-## ลำดับการทำ (แนะนำ)
+### frontend/.env.local
+```
+NEXT_PUBLIC_API_URL=https://your-api.railway.app
+```
 
-### Phase 1 — Backend API + Database
-- ตั้ง PostgreSQL database
-- สร้าง Node.js API server
-- ระบบ Auth (login, JWT)
-- CRUD records API
-- Deploy backend
+## Hosting แนะนำ
 
-### Phase 2 — เชื่อม Frontend กับ Backend
-- เปลี่ยน frontend จาก localStorage → API calls
-- หน้า Login
-- แต่ละ user เห็นเฉพาะข้อมูลตัวเอง
+| Service | Plan | หมายเหตุ |
+|---------|------|---------|
+| [Neon.tech](https://neon.tech) | Free 0.5 GB | ไม่มี sleep, always on |
+| [Railway.app](https://railway.app) | Free $5/เดือน | พอสำหรับ app เล็ก |
+| [Render.com](https://render.com) | Free | sleep หลัง 15 นาที idle |
+| [Vercel](https://vercel.com) | Free | Next.js ฟรี ไม่จำกัด |
 
-### Phase 3 — Admin Dashboard
-- หน้า admin จัดการ user
-- หน้า report รวม
-- Export Excel/PDF
+## สถานะปัจจุบัน
 
-## Hosting ที่แนะนำ (ฟรี)
-
-**Database — Neon.tech**
-- PostgreSQL ฟรี 0.5GB (เก็บข้อมูลขึ้นเอ็นได้หลายแสน records)
-- ไม่มี sleep, always available
-
-**Backend — Railway.app หรือ Render.com**
-- Railway: ฟรี $5 credit/เดือน (พอสำหรับ app เล็ก)
-- Render: ฟรี แต่ sleep หลัง 15 นาที idle
+- [x] Backend Go: Auth, Records CRUD, Admin CRUD, graceful shutdown
+- [x] Frontend Next.js: Login, Daily, Summary, Filter→Summary, Admin
+- [x] Database schema: users + records + updated_at triggers
+- [x] Migration 002: record type (string / sale)
+- [ ] Deploy backend (Railway / Render)
+- [ ] Deploy frontend (Vercel)
+- [ ] Export feature (Excel/PDF) — Phase 3

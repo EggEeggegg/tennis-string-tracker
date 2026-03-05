@@ -5,9 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/daily", icon: "📝", label: "บันทึก" },
-  { href: "/summary", icon: "📊", label: "รายวัน" },
-  { href: "/monthly", icon: "📅", label: "รายเดือน" },
-  { href: "/filter", icon: "🔍", label: "Filter" },
+  { href: "/summary", icon: "📊", label: "สรุป" },
 ];
 
 interface Props {

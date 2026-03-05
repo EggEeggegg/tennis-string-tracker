@@ -15,7 +15,8 @@ tennis-tracker/
 │   ├── Makefile                     ← make run / build / migrate / seed
 │   ├── .env.example
 │   ├── migrations/
-│   │   └── 001_init.sql             ← CREATE TABLE users, records + triggers
+│   │   ├── 001_init.sql             ← CREATE TABLE users, records + triggers
+│   │   └── 002_add_record_type.sql  ← เพิ่ม type column (string | sale)
 │   ├── cmd/
 │   │   ├── server/main.go           ← HTTP server entry + graceful shutdown
 │   │   └── seed/main.go             ← สร้าง admin user (make seed)
@@ -58,9 +59,7 @@ tennis-tracker/
     │       └── (dashboard)/
     │           ├── layout.tsx       ← auth guard + NavBar + ToastContainer
     │           ├── daily/page.tsx   ← บันทึกรายวัน (main page)
-    │           ├── summary/page.tsx ← สรุปรายวัน
-    │           ├── monthly/page.tsx ← สรุปรายเดือน
-    │           ├── filter/page.tsx  ← filter ช่วงวันที่
+    │           ├── summary/page.tsx ← สรุปรายวัน + filter ช่วงวันที่
     │           └── admin/page.tsx   ← admin: user management + report
 ```
 
@@ -125,9 +124,9 @@ npm run build && npm run start # production
 - `DELETE /api/admin/users/:id`
 - `GET    /api/admin/report?start=&end=&user_id=`
 
-## Database Schema (ดูรายละเอียดใน migrations/001_init.sql)
-- **users**: id (UUID), username, password (bcrypt), name, role, is_active
-- **records**: id, user_id (FK), date, seq, racket, string1, string2, price (200|300), note
+## Database Schema (ดูรายละเอียดใน migrations/)
+- **users**: id (UUID), username, password (bcrypt cost=12), name, role, is_active
+- **records**: id, user_id (FK), date, seq, **type** (string|sale), racket, string1, string2, price (200|300), note
 - ทั้งสองตารางมี `created_at`, `updated_at` + auto-update trigger
 
 ## ข้อควรระวัง
@@ -138,8 +137,9 @@ npm run build && npm run start # production
 - CORS ต้อง whitelist เฉพาะ frontend URL
 
 ## สถานะปัจจุบัน
-- [x] Backend Go: Auth, Records CRUD, Admin, graceful shutdown
-- [x] Frontend Next.js: Login, Daily, Summary, Monthly, Filter, Admin
+- [x] Backend Go: Auth, Records CRUD, Admin CRUD, graceful shutdown
+- [x] Migration 002: record type (string / sale)
+- [x] Frontend Next.js: Login, Daily, Summary (รวม filter), Admin
 - [ ] Deploy backend (Railway / Render)
 - [ ] Deploy frontend (Vercel)
 - [ ] Export feature (Excel/PDF) — Phase 3

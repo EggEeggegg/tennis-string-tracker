@@ -26,7 +26,9 @@ export function RecordCard({ record: r, onEdit, onDelete }: Props) {
 
           {/* Info */}
           <div className="min-w-0">
-            <div className="font-bold text-sm truncate">{r.racket}</div>
+            <div className="flex items-center gap-[6px]">
+              <div className="font-bold text-sm truncate">{r.racket}</div>
+            </div>
             <div className="text-xs text-[#64748b] mt-[2px]">
               {r.string1}
               {r.string2 ? ` / ${r.string2}` : ""}
@@ -42,12 +44,17 @@ export function RecordCard({ record: r, onEdit, onDelete }: Props) {
 
         {/* Right: price + actions */}
         <div className="flex flex-col items-end gap-[6px] flex-shrink-0 ml-2">
-          <span
-            className="num text-base"
-            style={{ color: r.price === 300 ? "#f59e0b" : "#22c55e" }}
-          >
-            ฿{r.price}
-          </span>
+          <div className="text-right">
+            <div className="num text-base" style={{ color: r.price === 300 ? "#f59e0b" : "#22c55e" }}>
+              ฿{r.price}
+            </div>
+            {r.is_new_racket && (
+              <div className="flex items-center gap-[3px] text-[10px] font-semibold px-[6px] py-[2px] rounded-full"
+                   style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>
+                🏷️ ขายไม้ +฿200
+              </div>
+            )}
+          </div>
           <div className="flex gap-[6px]">
             <button
               className="btn-ghost px-[10px] py-[6px] text-[11px] rounded-[8px]"

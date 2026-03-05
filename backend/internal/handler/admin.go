@@ -94,6 +94,12 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	// Prevent admin from banning themselves
+	if input.IsActive != nil && !*input.IsActive && id == c.GetString("userID") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot ban your own account"})
+		return
+	}
+
 	// Use a map so GORM updates boolean false correctly (struct Updates skips zero values)
 	updates := map[string]any{}
 	if input.Name != "" {
@@ -140,58 +146,55 @@ func (h *Handler) AdminReport(c *gin.Context) {
 	end := c.Query("end")
 
 	type UserReport struct {
-		UserID   string `db:"id" json:"user_id"`
-		Name     string `db:"name" json:"name"`
-		Username string `db:"username" json:"username"`
-		Count    int    `db:"count" json:"count"`
-		Total    int    `db:"total" json:"total"`
-		Count200 int    `db:"count_200" json:"count_200"`
-		Count300 int    `db:"count_300" json:"count_300"`
+		UserID    string `gorm:"column:user_id"    json:"user_id"`
+		Name      string `gorm:"column:name"       json:"name"`
+		Username  string `gorm:"column:username"   json:"username"`
+		Count     int    `gorm:"column:count"      json:"count"`
+		Total     int    `gorm:"column:total"      json:"total"`
+		Count200  int    `gorm:"column:count_200"  json:"count_200"`
+		Count300  int    `gorm:"column:count_300"  json:"count_300"`
+		SaleCount int    `gorm:"column:sale_count" json:"sale_count"`
+		SaleTotal int    `gorm:"column:sale_total" json:"sale_total"`
 	}
 
-	// Build parameterized query
-	query := `
-		SELECT
-			u.id,
-			u.name,
-			u.username,
-			COUNT(r.id) AS count,
-			COALESCE(SUM(r.price), 0) AS total,
-			COUNT(CASE WHEN r.price = 200 THEN 1 END) AS count_200,
-			COUNT(CASE WHEN r.price = 300 THEN 1 END) AS count_300
-		FROM users u
-		LEFT JOIN records r ON r.user_id = u.id`
-
+	// Build parameterized query — date filters go in JOIN to keep all users visible
+	joinCond := "r.user_id = u.id"
 	var args []interface{}
 	argCount := 1
 
 	if start != "" {
-		query += fmt.Sprintf(" AND (r.id IS NULL OR r.date >= $%d)", argCount)
+		joinCond += fmt.Sprintf(" AND r.date >= $%d", argCount)
 		args = append(args, start)
 		argCount++
 	}
-
 	if end != "" {
-		query += fmt.Sprintf(" AND (r.id IS NULL OR r.date <= $%d)", argCount)
+		joinCond += fmt.Sprintf(" AND r.date <= $%d", argCount)
 		args = append(args, end)
 		argCount++
 	}
 
-	query += " GROUP BY u.id, u.name, u.username ORDER BY total DESC, u.name"
+	query := fmt.Sprintf(`
+		SELECT
+			u.id                                                   AS user_id,
+			u.name,
+			u.username,
+			COUNT(r.id)                                            AS count,
+			COALESCE(SUM(r.price), 0)                              AS total,
+			COUNT(CASE WHEN r.price = 200 THEN 1 END)              AS count_200,
+			COUNT(CASE WHEN r.price = 300 THEN 1 END)              AS count_300,
+			COUNT(CASE WHEN r.is_new_racket THEN 1 END)            AS sale_count,
+			COALESCE(SUM(CASE WHEN r.is_new_racket THEN 200 END), 0) AS sale_total
+		FROM users u
+		LEFT JOIN records r ON %s
+		GROUP BY u.id, u.name, u.username
+		ORDER BY total DESC, u.name`, joinCond)
 
 	result := make([]UserReport, 0)
-
-	// DEBUG: Log query and args
-	fmt.Printf("DEBUG Query: %s\n", query)
-	fmt.Printf("DEBUG Args: %v\n", args)
 
 	if err := h.db.Raw(query, args...).Scan(&result).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to query report: %v", err)})
 		return
 	}
-
-	// DEBUG: Log result
-	fmt.Printf("DEBUG Result count: %d\n", len(result))
 
 	var grandTotal, grandCount int
 	for _, r := range result {

@@ -17,6 +17,7 @@ export interface Record {
   string1: string;
   string2: string;
   price: 200 | 300;
+  is_new_racket: boolean;
   note: string;
   created_at: string;
   updated_at: string;
@@ -25,13 +26,17 @@ export interface Record {
 export interface DaySummary {
   date: string; // YYYY-MM-DD
   count: number;
-  total: number;
+  total: number;      // รายได้ขึ้นเอ็นรวม
+  sale_count: number; // จำนวนไม้ใหม่
+  sale_total: number; // ค่าคอมขายไม้ (sale_count * 200)
 }
 
 export interface MonthSummary {
   month: string; // YYYY-MM
   count: number;
   total: number;
+  sale_count: number;
+  sale_total: number;
 }
 
 export interface UserReport {
@@ -42,6 +47,8 @@ export interface UserReport {
   total: number;
   count_200: number;
   count_300: number;
+  sale_count: number;
+  sale_total: number;
 }
 
 export interface AdminReportResponse {

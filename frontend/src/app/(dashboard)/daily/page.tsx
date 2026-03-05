@@ -6,7 +6,7 @@ import { RecordForm } from "@/components/RecordForm";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import { recordsApi } from "@/lib/api";
-import { today, fmtDate, fmtDateShort, fmtMoney } from "@/lib/utils";
+import { today, fmtDateShort, fmtMoney } from "@/lib/utils";
 import type { Record } from "@/types";
 
 export default function DailyPage() {
@@ -39,7 +39,7 @@ export default function DailyPage() {
     recordsApi
       .dailySummary()
       .then((ds) => setRecentDates(ds.map((d) => d.date).slice(0, 8)))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -47,7 +47,8 @@ export default function DailyPage() {
   }, [selDate, loadRecords]);
 
   const dayTotal = records.reduce((s, r) => s + r.price, 0);
-  const dayAvg = records.length ? Math.round(dayTotal / records.length) : 0;
+  const saleCount = records.filter((r) => r.is_new_racket).length;
+  const saleTotal = saleCount * 200;
 
   // ── Create ────────────────────────────────────────────────────────────────
 
@@ -155,19 +156,27 @@ export default function DailyPage() {
 
       {/* Stats */}
       {records.length > 0 && (
-        <div className="flex gap-2 mb-4">
-          {[
-            { label: "ไม้", value: records.length, color: "#e2e8f0" },
-            { label: "รายได้", value: `฿${fmtMoney(dayTotal)}`, color: "#22c55e" },
-            { label: "เฉลี่ย", value: `฿${fmtMoney(dayAvg)}`, color: "#a78bfa" },
-          ].map((s) => (
-            <div key={s.label} className="stat-card">
-              <div className="text-[#475569] text-[10px] font-semibold">{s.label}</div>
-              <div className="num text-xl mt-1" style={{ color: s.color }}>
-                {s.value}
+        <div className={`grid gap-2 mb-4 ${saleCount > 0 ? "grid-cols-2" : "grid-cols-2"}`}>
+          <div className="stat-card">
+            <div className="text-[#475569] text-[10px] font-semibold">ไม้</div>
+            <div className="num text-xl mt-1" style={{ color: "#e2e8f0" }}>{records.length}</div>
+          </div>
+          <div className="stat-card">
+            <div className="text-[#475569] text-[10px] font-semibold">รายได้</div>
+            <div className="num text-xl mt-1" style={{ color: "#22c55e" }}>฿{fmtMoney(dayTotal)}</div>
+          </div>
+          {saleCount > 0 && (
+            <>
+              <div className="stat-card">
+                <div className="text-[#475569] text-[10px] font-semibold">ขายไม้ได้</div>
+                <div className="num text-xl mt-1" style={{ color: "#e2e8f0" }}>{saleCount}</div>
               </div>
-            </div>
-          ))}
+              <div className="stat-card">
+                <div className="text-[#475569] text-[10px] font-semibold">ค่าคอม</div>
+                <div className="num text-xl mt-1" style={{ color: "#f59e0b" }}>฿{fmtMoney(saleTotal)}</div>
+              </div>
+            </>
+          )}
         </div>
       )}
 

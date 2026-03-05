@@ -84,6 +84,7 @@ export const recordsApi = {
     string1?: string;
     string2?: string;
     price: number;
+    is_new_racket?: boolean;
     note?: string;
   }) =>
     request<TRecord>("/api/records", {
@@ -98,6 +99,7 @@ export const recordsApi = {
       string1?: string;
       string2?: string;
       price: number;
+      is_new_racket?: boolean;
       note?: string;
     }
   ) =>

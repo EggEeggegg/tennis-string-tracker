@@ -4,12 +4,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"tennis-tracker/internal/config"
 	"tennis-tracker/internal/handler"
 	"tennis-tracker/internal/middleware"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // New builds and returns the configured Gin engine.

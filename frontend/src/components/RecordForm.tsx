@@ -2,6 +2,7 @@
 
 import type { Record } from "@/types";
 import { fmtDate } from "@/lib/utils";
+import { useState } from "react";
 
 interface Props {
   date: string;
@@ -11,13 +12,12 @@ interface Props {
     string1: string;
     string2: string;
     price: 200 | 300;
+    is_new_racket: boolean;
     note: string;
   }) => Promise<void>;
   onClose: () => void;
   loading?: boolean;
 }
-
-import { useState } from "react";
 
 export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props) {
   const isEdit = !!initial?.id;
@@ -26,6 +26,7 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
     string1: initial?.string1 ?? "",
     string2: initial?.string2 ?? "",
     price: (initial?.price ?? 200) as 200 | 300,
+    is_new_racket: initial?.is_new_racket ?? false,
     note: initial?.note ?? "",
   });
   const [error, setError] = useState("");
@@ -63,7 +64,7 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
           </div>
         )}
 
-        <div className="flex flex-col gap-[14px]">
+        <div className="flex flex-col gap-4">
           {/* Racket */}
           <div>
             <label className="text-xs text-[#64748b] mb-1 block">ชื่อไม้ *</label>
@@ -77,7 +78,7 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
           </div>
 
           {/* Strings */}
-          <div className="grid grid-cols-2 gap-[10px]">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-[#64748b] mb-1 block">เอ็น Main</label>
               <input
@@ -98,37 +99,27 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
             </div>
           </div>
 
-          {/* Price */}
+          {/* ราคา */}
           <div>
-            <label className="text-xs text-[#64748b] mb-2 block">ราคา</label>
-            <div className="flex gap-[10px]">
+            <label className="text-xs text-[#64748b] mb-1 block">ราคา</label>
+            <div className="flex gap-3">
               {([200, 300] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setForm({ ...form, price: p })}
-                  className="flex-1 py-[14px] rounded-[12px] font-bold text-lg num
-                             cursor-pointer transition-all duration-150"
+                  className="flex-1 py-[14px] rounded-[12px] font-bold text-lg num cursor-pointer transition-all duration-150"
                   style={{
-                    border: `2px solid ${
-                      form.price === p
-                        ? p === 200
-                          ? "#22c55e"
-                          : "#f59e0b"
-                        : "rgba(255,255,255,0.1)"
-                    }`,
-                    background:
-                      form.price === p
-                        ? p === 200
-                          ? "rgba(34,197,94,0.12)"
-                          : "rgba(245,158,11,0.12)"
-                        : "rgba(255,255,255,0.03)",
-                    color:
-                      form.price === p
-                        ? p === 200
-                          ? "#22c55e"
-                          : "#f59e0b"
-                        : "#64748b",
+                    border: `2px solid ${form.price === p
+                      ? p === 200 ? "#22c55e" : "#f59e0b"
+                      : "rgba(255,255,255,0.1)"
+                      }`,
+                    background: form.price === p
+                      ? p === 200 ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)"
+                      : "rgba(255,255,255,0.03)",
+                    color: form.price === p
+                      ? p === 200 ? "#22c55e" : "#f59e0b"
+                      : "#64748b",
                   }}
                 >
                   ฿{p}
@@ -136,6 +127,20 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
               ))}
             </div>
           </div>
+
+          {/* ประเภทงาน */}
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, is_new_racket: !form.is_new_racket })}
+            className="w-full py-[14px] rounded-[12px] font-medium text-sm cursor-pointer transition-all duration-150"
+            style={{
+              border: `2px solid ${form.is_new_racket ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.1)"}`,
+              background: form.is_new_racket ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.03)",
+              color: form.is_new_racket ? "#f59e0b" : "#64748b",
+            }}
+          >
+            {form.is_new_racket ? "เอ็น + ค่าคอมขายไม้" : "ขึ้นเอ็นอย่างเดียว"}
+          </button>
 
           {/* Note */}
           <div>
@@ -150,7 +155,7 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
         </div>
 
         {/* Actions */}
-        <div className="flex gap-[10px] mt-5">
+        <div className="flex gap-3 mt-4">
           <button className="btn-ghost flex-1" onClick={onClose}>
             ยกเลิก
           </button>

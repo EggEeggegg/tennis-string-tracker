@@ -15,7 +15,6 @@ func (h *Handler) ListRecords(c *gin.Context) {
 	start := c.Query("start")
 	end := c.Query("end")
 
-	// Build query with GORM — filters applied conditionally
 	q := h.db.Where("user_id = ?", userID).Order("date DESC, seq ASC")
 
 	switch {
@@ -31,7 +30,6 @@ func (h *Handler) ListRecords(c *gin.Context) {
 		return
 	}
 
-	// AfterFind hook already set DateStr on each record
 	c.JSON(http.StatusOK, records)
 }
 
@@ -45,14 +43,12 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	// Parse the date string from the request body
 	parsedDate, err := time.Parse("2006-01-02", input.Date)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, expected YYYY-MM-DD"})
 		return
 	}
 
-	// Auto-calculate seq (next number for this user + date)
 	var maxSeq int
 	h.db.Model(&model.Record{}).
 		Where("user_id = ? AND date = ?", userID, input.Date).
@@ -60,14 +56,15 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		Scan(&maxSeq)
 
 	record := model.Record{
-		UserID:  userID,
-		Date:    parsedDate,
-		Seq:     maxSeq + 1,
-		Racket:  input.Racket,
-		String1: input.String1,
-		String2: input.String2,
-		Price:   input.Price,
-		Note:    input.Note,
+		UserID:      userID,
+		Date:        parsedDate,
+		Seq:         maxSeq + 1,
+		Racket:      input.Racket,
+		String1:     input.String1,
+		String2:     input.String2,
+		Price:       input.Price,
+		IsNewRacket: input.IsNewRacket,
+		Note:        input.Note,
 	}
 
 	if err := h.db.Create(&record).Error; err != nil {
@@ -75,7 +72,6 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	// AfterFind won't fire for Create — set DateStr manually
 	record.DateStr = record.Date.Format("2006-01-02")
 	c.JSON(http.StatusCreated, record)
 }
@@ -91,18 +87,17 @@ func (h *Handler) UpdateRecord(c *gin.Context) {
 		return
 	}
 
-	// Fetch existing record first (ensures ownership)
 	var record model.Record
 	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "record not found"})
 		return
 	}
 
-	// Apply changes and save (GORM will auto-update UpdatedAt)
 	record.Racket = input.Racket
 	record.String1 = input.String1
 	record.String2 = input.String2
 	record.Price = input.Price
+	record.IsNewRacket = input.IsNewRacket
 	record.Note = input.Note
 
 	if err := h.db.Save(&record).Error; err != nil {
@@ -110,7 +105,6 @@ func (h *Handler) UpdateRecord(c *gin.Context) {
 		return
 	}
 
-	// AfterFind doesn't fire on Save — set DateStr manually
 	record.DateStr = record.Date.Format("2006-01-02")
 	c.JSON(http.StatusOK, record)
 }
@@ -120,7 +114,6 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 	userID := c.GetString("userID")
 	id := c.Param("id")
 
-	// Find first to get the date (needed for resequencing)
 	var record model.Record
 	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "record not found"})
@@ -134,7 +127,6 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 		return
 	}
 
-	// Resequence remaining records for that date
 	h.db.Exec(`
 		WITH ranked AS (
 			SELECT id, ROW_NUMBER() OVER (ORDER BY seq) AS new_seq
@@ -148,23 +140,24 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 }
 
 // GET /api/records/summary/daily?start=&end=
-// If no start/end provided, defaults to last 7 days
 func (h *Handler) DailySummary(c *gin.Context) {
 	userID := c.GetString("userID")
 	start := c.Query("start")
 	end := c.Query("end")
 
-	// If no range specified, use last 7 days
 	if start == "" && end == "" {
 		today := time.Now().UTC()
-		start = today.AddDate(0, 0, -6).Format("2006-01-02") // 7 days ago
-		end = today.Format("2006-01-02")                      // today
+		start = today.AddDate(0, 0, -6).Format("2006-01-02")
+		end = today.Format("2006-01-02")
 	}
 
-	// Build raw SQL — GORM Raw works well for aggregate queries
-	sql := `SELECT date, COUNT(*)::int AS count, SUM(price)::int AS total
+	sql := `SELECT date,
+	               COUNT(*)::int                                        AS count,
+	               SUM(price)::int                                      AS total,
+	               COUNT(*) FILTER (WHERE is_new_racket)::int           AS sale_count,
+	               (COUNT(*) FILTER (WHERE is_new_racket) * ?)::int     AS sale_total
 	          FROM records WHERE user_id = ?`
-	args := []any{userID}
+	args := []any{model.NewRacketCommission, userID}
 
 	if start != "" {
 		sql += " AND date >= ?"
@@ -176,11 +169,12 @@ func (h *Handler) DailySummary(c *gin.Context) {
 	}
 	sql += " GROUP BY date ORDER BY date DESC"
 
-	// Use an intermediate struct (DATE → time.Time then format to string)
 	var rows []struct {
-		Date  time.Time
-		Count int
-		Total int
+		Date      time.Time
+		Count     int
+		Total     int
+		SaleCount int
+		SaleTotal int
 	}
 	if err := h.db.Raw(sql, args...).Scan(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query daily summary"})
@@ -190,9 +184,11 @@ func (h *Handler) DailySummary(c *gin.Context) {
 	result := make([]model.DaySummary, len(rows))
 	for i, r := range rows {
 		result[i] = model.DaySummary{
-			Date:  r.Date.Format("2006-01-02"),
-			Count: r.Count,
-			Total: r.Total,
+			Date:      r.Date.Format("2006-01-02"),
+			Count:     r.Count,
+			Total:     r.Total,
+			SaleCount: r.SaleCount,
+			SaleTotal: r.SaleTotal,
 		}
 	}
 
@@ -204,9 +200,13 @@ func (h *Handler) MonthlySummary(c *gin.Context) {
 	userID := c.GetString("userID")
 	year := c.Query("year")
 
-	sql := `SELECT TO_CHAR(date, 'YYYY-MM') AS month, COUNT(*)::int AS count, SUM(price)::int AS total
+	sql := `SELECT TO_CHAR(date, 'YYYY-MM')                            AS month,
+	               COUNT(*)::int                                        AS count,
+	               SUM(price)::int                                      AS total,
+	               COUNT(*) FILTER (WHERE is_new_racket)::int           AS sale_count,
+	               (COUNT(*) FILTER (WHERE is_new_racket) * ?)::int     AS sale_total
 	          FROM records WHERE user_id = ?`
-	args := []any{userID}
+	args := []any{model.NewRacketCommission, userID}
 
 	if year != "" {
 		sql += " AND EXTRACT(YEAR FROM date) = ?"

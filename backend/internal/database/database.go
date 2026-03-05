@@ -42,6 +42,16 @@ func Connect(dsn string) *gorm.DB {
 		log.Fatalf("database: ping failed: %v", err)
 	}
 
+	// Auto-apply schema additions on every startup (idempotent via IF NOT EXISTS)
+	migrations := []string{
+		`ALTER TABLE records ADD COLUMN IF NOT EXISTS is_new_racket BOOLEAN NOT NULL DEFAULT false`,
+	}
+	for _, m := range migrations {
+		if err := db.Exec(m).Error; err != nil {
+			log.Fatalf("database: migration failed: %v", err)
+		}
+	}
+
 	log.Println("database: connected (GORM + postgres driver)")
 	return db
 }
