@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: tennis-tracker-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false        # ใส่เองใน Render dashboard
+      - key: JWT_SECRET
+        sync: false        # ใส่เองใน Render dashboard
+      - key: CORS_ORIGIN
+        sync: false        # ใส่ Vercel URL หลัง deploy frontend
+      - key: GIN_MODE
+        value: release
+      - key: PORT
+        value: "8080"
