@@ -51,10 +51,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <ToastContainer />
 
       {/* Logout button (top-right) */}
-      <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
-        <span className="text-[11px] text-[#374560]">{user?.name}</span>
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        <span className="text-sm text-[#64748b]">{user?.name}</span>
         <button
-          className="text-[10px] text-[#374560] px-2 py-1 rounded-[6px] bg-white/[0.04] border border-white/[0.06]"
+          className="text-xs text-[#64748b] px-3 py-[6px] rounded-[6px] bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08]"
           onClick={() => {
             clearAuth();
             router.replace("/login");
@@ -64,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
       </div>
 
-      {children}
+      <div className="pt-16">{children}</div>
 
       <NavBar isAdmin={user?.role === "admin"} />
     </div>

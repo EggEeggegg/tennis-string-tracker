@@ -6,9 +6,9 @@ run:
 build:
 	go build -o bin/server ./cmd/server
 
-# Run DB migrations (requires psql and DATABASE_URL in env)
+# Run all DB migrations in order
 migrate:
-	psql "$(DATABASE_URL)" -f migrations/001_init.sql
+	go run ./cmd/migrate
 
 # Seed admin user (username: admin, password: admin123)
 seed:

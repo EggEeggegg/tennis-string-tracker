@@ -80,11 +80,13 @@ export const recordsApi = {
 
   create: (body: {
     date: string;
-    racket: string;
+    record_type?: string;
+    racket?: string;
     string1?: string;
     string2?: string;
     price: number;
     is_new_racket?: boolean;
+    activity_name?: string;
     note?: string;
   }) =>
     request<TRecord>("/api/records", {
@@ -95,11 +97,13 @@ export const recordsApi = {
   update: (
     id: string,
     body: {
-      racket: string;
+      record_type?: string;
+      racket?: string;
       string1?: string;
       string2?: string;
       price: number;
       is_new_racket?: boolean;
+      activity_name?: string;
       note?: string;
     }
   ) =>
@@ -110,12 +114,26 @@ export const recordsApi = {
 
   delete: (id: string) =>
     request<null>(`/api/records/${id}`, { method: "DELETE" }),
+
+  exportExcel: (start: string, end: string) => {
+    const q = new URLSearchParams();
+    q.set("start", start);
+    q.set("end", end);
+    const token = getToken();
+    const url = `${BASE}/api/records/export?${q}`;
+    const headers: { [key: string]: string } = {
+      Authorization: `Bearer ${token}`,
+    };
+    return fetch(url, { headers });
+  },
 };
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export const adminApi = {
   listUsers: () => request<User[]>("/api/admin/users"),
+
+  listDeletedUsers: () => request<User[]>("/api/admin/users/deleted"),
 
   createUser: (body: {
     username: string;
@@ -140,10 +158,25 @@ export const adminApi = {
   deleteUser: (id: string) =>
     request<null>(`/api/admin/users/${id}`, { method: "DELETE" }),
 
+  restoreUser: (id: string) =>
+    request<User>(`/api/admin/users/${id}/restore`, { method: "POST" }),
+
   report: (params: { start?: string; end?: string; user_id?: string } = {}) => {
     const q = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v))
     );
     return request<AdminReportResponse>(`/api/admin/report?${q}`);
+  },
+
+  exportReportCSV: (start?: string, end?: string) => {
+    const q = new URLSearchParams();
+    if (start) q.set("start", start);
+    if (end) q.set("end", end);
+    const token = getToken();
+    const url = `${BASE}/api/admin/report/export?${q}`;
+    const headers: { [key: string]: string } = {
+      Authorization: `Bearer ${token}`,
+    };
+    return fetch(url, { headers });
   },
 };

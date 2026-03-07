@@ -4,7 +4,8 @@
       "Bash(go mod tidy)",
       "Bash(go build ./...)",
       "Bash(npm install)",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(go test ./tests -v)"
     ]
   }
 }

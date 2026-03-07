@@ -32,11 +32,23 @@ function AdminContent() {
   const [editForm, setEditForm] = useState({ name: "", role: "user", password: "" });
   const [editing, setEditing] = useState(false);
 
+  const [deletedUsers, setDeletedUsers] = useState<User[]>([]);
+
   const loadUsers = useCallback(() => {
     adminApi.listUsers().then(setUsers).catch(() => toast("โหลด user ล้มเหลว", "error"));
   }, []);
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  const loadDeletedUsers = useCallback(() => {
+    adminApi.listDeletedUsers().then(setDeletedUsers).catch(() => toast("โหลด deleted users ล้มเหลว", "error"));
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    loadDeletedUsers();
+  }, [loadDeletedUsers]);
 
   const handleToggleActive = async (u: User) => {
     try {
@@ -54,6 +66,7 @@ function AdminContent() {
       await adminApi.deleteUser(deleteUserId);
       setUsers((prev) => prev.filter((u) => u.id !== deleteUserId));
       setDeleteUserId(null);
+      loadDeletedUsers(); // โหลด deleted users ใหม่
       toast("ลบผู้ใช้แล้ว", "warning");
     } catch {
       toast("เกิดข้อผิดพลาด", "error");
@@ -80,6 +93,7 @@ function AdminContent() {
       setUsers((prev) => [...prev, u]);
       setShowCreateForm(false);
       setCreateForm({ username: "", password: "", name: "", role: "user" });
+      loadDeletedUsers(); // โหลด deleted users เพื่อให้ count ถูกต้อง
       toast("สร้าง user สำเร็จ ✓");
     } catch (e: unknown) {
       toast(e instanceof Error ? e.message : "เกิดข้อผิดพลาด", "error");
@@ -120,11 +134,31 @@ function AdminContent() {
     }
   };
 
+  // ── Deleted users tab ─────────────────────────────────────────────────────
+
+  const [restoreUserId, setRestoreUserId] = useState<string | null>(null);
+
+  const handleRestoreUser = async () => {
+    if (!restoreUserId) return;
+    try {
+      const restored = await adminApi.restoreUser(restoreUserId);
+      setDeletedUsers((prev) => prev.filter((u) => u.id !== restored.id));
+      setUsers((prev) => [...prev, restored]);
+      setRestoreUserId(null);
+      setShowDeletedUsers(false); // ย้อนกลับไปหน้า active users
+      toast("กู้คืนผู้ใช้แล้ว ✓");
+    } catch {
+      toast("เกิดข้อผิดพลาด", "error");
+    }
+  };
+
   // ── Report tab ─────────────────────────────────────────────────────────────
 
   const [tab, setTab] = useState<"users" | "report">(
     (searchParams.get("tab") as "users" | "report") ?? "users"
   );
+
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
 
   const changeTab = (t: "users" | "report") => {
     setTab(t);
@@ -144,6 +178,35 @@ function AdminContent() {
       toast("โหลด report ล้มเหลว", "error");
     } finally {
       setRepLoading(false);
+    }
+  };
+
+  const downloadReportCSV = async () => {
+    if (!report) {
+      toast("ไม่มีรายงานให้ดาวน์โหลด", "error");
+      return;
+    }
+
+    try {
+      const res = await adminApi.exportReportCSV(repStart, repEnd);
+      if (!res.ok) {
+        toast("ดาวน์โหลดล้มเหลว", "error");
+        return;
+      }
+
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `report_${repStart}_${repEnd}.xlsx`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast("ดาวน์โหลดสำเร็จ ✓");
+    } catch {
+      toast("ดาวน์โหลดล้มเหลว", "error");
     }
   };
 
@@ -214,85 +277,154 @@ function AdminContent() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h2 className="font-bold text-base">รายชื่อผู้ใช้</h2>
-              <p className="text-xs text-[#475569]">{users.length} บัญชี</p>
+              <h2 className="font-bold text-base">
+                {showDeletedUsers ? "ผู้ใช้ที่ถูกลบ" : "รายชื่อผู้ใช้"}
+              </h2>
+              <p className="text-xs text-[#475569]">
+                {showDeletedUsers ? deletedUsers.length : users.length} บัญชี
+              </p>
             </div>
-            <button
-              className="btn-primary px-4 py-[10px] text-sm flex items-center gap-1"
-              onClick={() => setShowCreateForm(true)}
-            >
-              <span className="text-lg leading-none">+</span> เพิ่มผู้ใช้
-            </button>
+            <div className="flex gap-2 items-center">
+              {deletedUsers.length > 0 && (
+                <button
+                  className={`text-xs px-3 py-[10px] rounded-[10px] border font-semibold transition-all ${showDeletedUsers
+                    ? "text-gray-400 border-gray-500/30 bg-gray-500/10 active:bg-gray-500/20"
+                    : "text-emerald-400 border-emerald-500/30 bg-emerald-500/10 active:bg-emerald-500/20"
+                    }`}
+                  onClick={() => {
+                    setShowDeletedUsers(!showDeletedUsers);
+                    if (!showDeletedUsers) loadDeletedUsers();
+                  }}
+                >
+                  🗑️ {showDeletedUsers ? "รายชื่อ" : "กู้คืน"} ({deletedUsers.length})
+                </button>
+              )}
+              {!showDeletedUsers && (
+                <button
+                  className="btn-primary px-4 py-[10px] text-sm flex items-center gap-1"
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  <span className="text-lg leading-none">+</span> เพิ่มผู้ใช้
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3">
-            {users.map((u) => (
-              <div
-                key={u.id}
-                className="rounded-[16px] border border-white/[0.07] bg-white/[0.03] p-4 transition-colors active:bg-white/[0.05]"
-              >
-                <div className="flex items-center gap-3">
-                  {/* Avatar */}
+          {showDeletedUsers ? (
+            deletedUsers.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-[#475569] text-sm">ไม่มีผู้ใช้ที่ถูกลบ</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {deletedUsers.map((u) => (
                   <div
-                    className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarColor(u.name)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                    key={u.id}
+                    className="rounded-[16px] border border-white/[0.07] bg-white/[0.03] p-4"
                   >
-                    {initials(u.name)}
-                  </div>
+                    <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div
+                        className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarColor(u.name)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                      >
+                        {initials(u.name)}
+                      </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-[15px] text-[#e2e8f0]">{u.name}</span>
-                      {u.role === "admin" && (
-                        <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/25 px-2 py-[2px] rounded-full font-semibold">
-                          ADMIN
-                        </span>
-                      )}
-                      {!u.is_active && (
-                        <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/25 px-2 py-[2px] rounded-full font-semibold">
-                          BANNED
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-[#475569] mt-[2px]">@{u.username}</div>
-                  </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-[15px] text-[#e2e8f0]">{u.name}</span>
+                          {u.role === "admin" && (
+                            <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/25 px-2 py-[2px] rounded-full font-semibold">
+                              ADMIN
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[#475569] mt-[2px]">@{u.username}</div>
+                      </div>
 
-                  {/* Actions */}
-                  {u.id !== currentUser?.id && (
-                    <div className="flex gap-[6px] flex-shrink-0">
+                      {/* Restore button */}
                       <button
-                        onClick={() => handleToggleActive(u)}
-                        className={`text-xs px-3 py-[7px] rounded-[10px] border font-semibold transition-all ${
-                          u.is_active
+                        className="text-xs px-3 py-[7px] rounded-[10px] border text-emerald-400 border-emerald-500/30 bg-emerald-500/10 active:bg-emerald-500/20 font-semibold"
+                        onClick={() => setRestoreUserId(u.id)}
+                      >
+                        ✓ กู้คืน
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="flex flex-col gap-3">
+              {users.map((u) => (
+                <div
+                  key={u.id}
+                  className="rounded-[16px] border border-white/[0.07] bg-white/[0.03] p-4 transition-colors active:bg-white/[0.05]"
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <div
+                      className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarColor(u.name)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                    >
+                      {initials(u.name)}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-[15px] text-[#e2e8f0]">{u.name}</span>
+                        {u.role === "admin" && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/25 px-2 py-[2px] rounded-full font-semibold">
+                            ADMIN
+                          </span>
+                        )}
+                        {!u.is_active && (
+                          <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/25 px-2 py-[2px] rounded-full font-semibold">
+                            BANNED
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#475569] mt-[2px]">@{u.username}</div>
+                    </div>
+
+                    {/* Actions */}
+                    {u.id !== currentUser?.id && (
+                      <div className="flex gap-[6px] flex-shrink-0">
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          className={`text-xs px-3 py-[7px] rounded-[10px] border font-semibold transition-all ${u.is_active
                             ? "text-amber-400 border-amber-500/30 bg-amber-500/10 active:bg-amber-500/20"
                             : "text-emerald-400 border-emerald-500/30 bg-emerald-500/10 active:bg-emerald-500/20"
-                        }`}
-                      >
-                        {u.is_active ? "Ban" : "Unban"}
-                      </button>
-                      <button
-                        className="text-xs px-3 py-[7px] rounded-[10px] border text-blue-400 border-blue-500/30 bg-blue-500/10 active:bg-blue-500/20 font-semibold"
-                        onClick={() => handleEditClick(u)}
-                      >
-                        แก้ไข
-                      </button>
-                      <button
-                        className="text-xs px-3 py-[7px] rounded-[10px] border text-red-400 border-red-500/30 bg-red-500/10 active:bg-red-500/20"
-                        onClick={() => setDeleteUserId(u.id)}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  )}
-                  {u.id === currentUser?.id && (
-                    <span className="text-[10px] text-[#374560] bg-white/[0.04] border border-white/[0.06] px-2 py-1 rounded-full">
-                      คุณ
-                    </span>
-                  )}
+                            }`}
+                        >
+                          {u.is_active ? "Ban" : "Unban"}
+                        </button>
+                        <button
+                          className="text-xs px-3 py-[7px] rounded-[10px] border text-blue-400 border-blue-500/30 bg-blue-500/10 active:bg-blue-500/20 font-semibold"
+                          onClick={() => handleEditClick(u)}
+                        >
+                          แก้ไข
+                        </button>
+                        <button
+                          className="text-xs px-3 py-[7px] rounded-[10px] border text-red-400 border-red-500/30 bg-red-500/10 active:bg-red-500/20 font-semibold"
+                          onClick={() => setDeleteUserId(u.id)}
+                          title="ลบผู้ใช้ (soft delete)"
+                        >
+                          ❌ ลบ
+                        </button>
+                      </div>
+                    )}
+                    {u.id === currentUser?.id && (
+                      <span className="text-[10px] text-[#374560] bg-white/[0.04] border border-white/[0.06] px-2 py-1 rounded-full">
+                        คุณ
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Create user modal */}
           {showCreateForm && (
@@ -338,11 +470,10 @@ function AdminContent() {
                         <button
                           key={r}
                           onClick={() => setCreateForm({ ...createForm, role: r })}
-                          className={`flex-1 py-3 rounded-[12px] text-sm font-semibold transition-all ${
-                            createForm.role === r
-                              ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
-                              : "bg-white/[0.04] border-2 border-white/10 text-[#64748b]"
-                          }`}
+                          className={`flex-1 py-3 rounded-[12px] text-sm font-semibold transition-all ${createForm.role === r
+                            ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
+                            : "bg-white/[0.04] border-2 border-white/10 text-[#64748b]"
+                            }`}
                         >
                           {r === "user" ? "👤 User" : "⚙️ Admin"}
                         </button>
@@ -408,11 +539,10 @@ function AdminContent() {
                         <button
                           key={r}
                           onClick={() => setEditForm({ ...editForm, role: r })}
-                          className={`flex-1 py-3 rounded-[12px] text-sm font-semibold transition-all ${
-                            editForm.role === r
-                              ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
-                              : "bg-white/[0.04] border-2 border-white/10 text-[#64748b]"
-                          }`}
+                          className={`flex-1 py-3 rounded-[12px] text-sm font-semibold transition-all ${editForm.role === r
+                            ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
+                            : "bg-white/[0.04] border-2 border-white/10 text-[#64748b]"
+                            }`}
                         >
                           {r === "user" ? "👤 User" : "⚙️ Admin"}
                         </button>
@@ -463,9 +593,19 @@ function AdminContent() {
                 />
               </div>
             </div>
-            <button className="btn-primary w-full py-[12px]" onClick={loadReport} disabled={repLoading}>
-              {repLoading ? "กำลังโหลด…" : "🔍 ดูรายงาน"}
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1 py-[12px]" onClick={loadReport} disabled={repLoading}>
+                {repLoading ? "กำลังโหลด…" : "🔍 ดูรายงาน"}
+              </button>
+              <button
+                className="btn-primary py-[12px] px-4 disabled:opacity-60"
+                onClick={downloadReportCSV}
+                disabled={!report || repLoading}
+                title="ดาวน์โหลดรายงานเป็น Excel"
+              >
+                📊
+              </button>
+            </div>
           </div>
 
           {report && (
@@ -474,6 +614,8 @@ function AdminContent() {
               {(() => {
                 const grandSaleTotal = report.users.reduce((s, u) => s + u.sale_total, 0);
                 const grandSaleCount = report.users.reduce((s, u) => s + u.sale_count, 0);
+                const grandOtherTotal = report.grand_other_total ?? 0;
+                const grandOtherCount = report.grand_other_count ?? 0;
                 return (
                   <div className="mb-5">
                     <p className="text-xs font-semibold text-[#475569] mb-3">ภาพรวมทั้งหมด</p>
@@ -484,7 +626,7 @@ function AdminContent() {
                         style={{ background: "linear-gradient(135deg,rgba(59,130,246,0.15),rgba(59,130,246,0.06))", border: "1px solid rgba(59,130,246,0.2)" }}
                       >
                         <div className="text-blue-400 text-lg mb-1">🎾</div>
-                        <div className="num text-2xl font-bold text-blue-400">{report.grand_count}</div>
+                        <div className="num text-lg font-bold text-blue-400 leading-tight">{report.grand_count} ไม้</div>
                         <div className="text-[11px] text-[#475569] mt-1 font-semibold">รวมไม้</div>
                       </div>
                       {/* รายรับเอ็น */}
@@ -507,6 +649,22 @@ function AdminContent() {
                       </div>
                     </div>
 
+                    {/* Other income — show only if exists */}
+                    {grandOtherCount > 0 && (
+                      <div
+                        className="rounded-[16px] p-4 mt-2 flex items-center justify-between"
+                        style={{ background: "linear-gradient(135deg,rgba(6,182,212,0.12),rgba(6,182,212,0.05))", border: "1px solid rgba(6,182,212,0.2)" }}
+                      >
+                        <div>
+                          <div className="text-xs text-[#475569] font-semibold">รายได้อื่นๆ</div>
+                          <div className="text-[11px] text-[#374560] mt-[2px]">{grandOtherCount} รายการ</div>
+                        </div>
+                        <div className="num text-xl font-bold text-cyan-400">
+                          ฿{fmtMoney(grandOtherTotal)}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Total revenue */}
                     <div
                       className="rounded-[16px] p-4 mt-2 flex items-center justify-between"
@@ -514,10 +672,10 @@ function AdminContent() {
                     >
                       <div>
                         <div className="text-xs text-[#475569] font-semibold">รายรับรวมทั้งหมด</div>
-                        <div className="text-[11px] text-[#374560] mt-[2px]">เอ็น + ขายไม้</div>
+                        <div className="text-[11px] text-[#374560] mt-[2px]">เอ็น + ขายไม้{grandOtherCount > 0 ? " + อื่นๆ" : ""}</div>
                       </div>
                       <div className="num text-2xl font-bold text-purple-400">
-                        ฿{fmtMoney(report.grand_total + grandSaleTotal)}
+                        ฿{fmtMoney(report.grand_total + grandSaleTotal + grandOtherTotal)}
                       </div>
                     </div>
                   </div>
@@ -546,7 +704,7 @@ function AdminContent() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="num text-xl font-bold text-purple-400">฿{fmtMoney(u.total + u.sale_total)}</div>
+                        <div className="num text-xl font-bold text-purple-400">฿{fmtMoney(u.total + u.sale_total + (u.other_total ?? 0))}</div>
                         <div className="text-[10px] text-[#475569]">รวมทั้งหมด</div>
                       </div>
                     </div>
@@ -582,6 +740,20 @@ function AdminContent() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Other income — show only if exists */}
+                    {(u.other_count ?? 0) > 0 && (
+                      <div
+                        className="rounded-[12px] p-3 mt-2 flex items-center justify-between"
+                        style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.14)" }}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px]">💰</span>
+                          <span className="text-[11px] text-[#475569] font-semibold">รายได้อื่นๆ ({u.other_count} รายการ)</span>
+                        </div>
+                        <div className="num text-base font-bold text-cyan-400">฿{fmtMoney(u.other_total)}</div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -598,6 +770,17 @@ function AdminContent() {
           confirmLabel="ลบ"
           onConfirm={handleDeleteUser}
           onCancel={() => setDeleteUserId(null)}
+        />
+      )}
+
+      {/* Restore confirm */}
+      {restoreUserId && (
+        <ConfirmDialog
+          title="กู้คืนผู้ใช้นี้?"
+          description="ผู้ใช้จะกลับมาในรายชื่อผู้ใช้ทั่วไป"
+          confirmLabel="กู้คืน"
+          onConfirm={handleRestoreUser}
+          onCancel={() => setRestoreUserId(null)}
         />
       )}
     </div>

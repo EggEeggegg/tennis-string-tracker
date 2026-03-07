@@ -2,5 +2,31 @@ version: "3"
 
 tasks:
     dev:
+        desc: Run dev server with hot reload (air)
         cmds:
             - air
+
+    run:
+        desc: Run server (no hot reload)
+        cmds:
+            - go run ./cmd/server
+
+    build:
+        desc: Build binary to bin/server
+        cmds:
+            - go build -o bin/server ./cmd/server
+
+    migrate:
+        desc: Run all SQL migrations in order
+        cmds:
+            - go run ./cmd/migrate
+
+    seed:
+        desc: Create admin user (admin / admin123)
+        cmds:
+            - go run ./cmd/seed
+
+    tidy:
+        desc: Tidy Go modules
+        cmds:
+            - go mod tidy

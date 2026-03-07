@@ -23,6 +23,7 @@ type User struct {
 	Name      string    `gorm:"not null;size:100"                              json:"name"`
 	Role      UserRole  `gorm:"not null;type:user_role_enum;default:'user'"    json:"role"`
 	IsActive  bool      `gorm:"default:true"                                   json:"is_active"`
+	IsDeleted bool      `gorm:"default:false;index"                            json:"is_deleted"` // soft delete flag
 	CreatedAt time.Time `                                                       json:"created_at"`
 	UpdatedAt time.Time `                                                       json:"updated_at"`
 }

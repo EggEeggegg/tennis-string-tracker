@@ -8,36 +8,81 @@ interface Props {
   date: string;
   initial?: Partial<Record>;
   onSubmit: (data: {
+    record_type: "string" | "other";
     racket: string;
     string1: string;
     string2: string;
-    price: 200 | 300;
+    price: number;
     is_new_racket: boolean;
+    activity_name: string;
     note: string;
   }) => Promise<void>;
   onClose: () => void;
   loading?: boolean;
 }
 
+const ACTIVITY_OPTIONS = [
+  "ค่าบริการ Demo ไม้เทนนิส",
+  "พัน Grip",
+  "อื่นๆ",
+];
+
 export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props) {
   const isEdit = !!initial?.id;
+  const [recordType, setRecordType] = useState<"string" | "other">(
+    initial?.record_type ?? "string"
+  );
   const [form, setForm] = useState({
     racket: initial?.racket ?? "",
     string1: initial?.string1 ?? "",
     string2: initial?.string2 ?? "",
-    price: (initial?.price ?? 200) as 200 | 300,
+    price: (initial?.record_type === "string" ? (initial?.price ?? 200) : 200) as 200 | 300,
     is_new_racket: initial?.is_new_racket ?? false,
+    activity_name: initial?.activity_name ?? "",
+    otherPrice: initial?.record_type === "other" ? String(initial?.price ?? "") : "",
     note: initial?.note ?? "",
   });
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!form.racket.trim()) {
-      setError("กรุณากรอกชื่อไม้");
-      return;
-    }
     setError("");
-    await onSubmit(form);
+
+    if (recordType === "string") {
+      if (!form.racket.trim()) {
+        setError("กรุณากรอกชื่อไม้");
+        return;
+      }
+      await onSubmit({
+        record_type: "string",
+        racket: form.racket,
+        string1: form.string1,
+        string2: form.string2,
+        price: form.price,
+        is_new_racket: form.is_new_racket,
+        activity_name: "",
+        note: form.note,
+      });
+    } else {
+      if (!form.activity_name.trim()) {
+        setError("กรุณากรอกชื่อกิจกรรม");
+        return;
+      }
+      const parsedPrice = parseInt(form.otherPrice, 10);
+      if (!form.otherPrice || isNaN(parsedPrice) || parsedPrice <= 0) {
+        setError("กรุณากรอกราคาให้ถูกต้อง (ตัวเลขมากกว่า 0)");
+        return;
+      }
+      await onSubmit({
+        record_type: "other",
+        racket: "",
+        string1: "",
+        string2: "",
+        price: parsedPrice,
+        is_new_racket: false,
+        activity_name: form.activity_name,
+        note: form.note,
+      });
+    }
   };
 
   return (
@@ -52,6 +97,39 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
           <div className="text-xs text-[#64748b]">{fmtDate(date)}</div>
         </div>
 
+        {/* Type toggle — hide if editing (type is fixed) */}
+        {!isEdit && (
+          <div
+            className="flex rounded-[10px] p-1 mb-4"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <button
+              type="button"
+              onClick={() => { setRecordType("string"); setError(""); }}
+              className="flex-1 py-[8px] rounded-[8px] text-xs font-semibold transition-all duration-200"
+              style={
+                recordType === "string"
+                  ? { background: "#3b82f6", color: "#fff" }
+                  : { color: "#475569" }
+              }
+            >
+              🎾 ขึ้นเอ็น
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRecordType("other"); setError(""); }}
+              className="flex-1 py-[8px] rounded-[8px] text-xs font-semibold transition-all duration-200"
+              style={
+                recordType === "other"
+                  ? { background: "#06b6d4", color: "#fff" }
+                  : { color: "#475569" }
+              }
+            >
+              💰 รายได้อื่นๆ
+            </button>
+          </div>
+        )}
+
         {isEdit && (
           <div className="bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.2)] rounded-[10px] px-3 py-2 mb-4 text-xs text-[#f59e0b]">
             ⏱ updatedAt จะอัพเดทอัตโนมัติเมื่อบันทึก
@@ -65,84 +143,124 @@ export function RecordForm({ date, initial, onSubmit, onClose, loading }: Props)
         )}
 
         <div className="flex flex-col gap-4">
-          {/* Racket */}
-          <div>
-            <label className="text-xs text-[#64748b] mb-1 block">ชื่อไม้ *</label>
-            <input
-              className="inp"
-              placeholder="เช่น Wilson Pro Staff 97"
-              value={form.racket}
-              onChange={(e) => setForm({ ...form, racket: e.target.value })}
-              autoFocus
-            />
-          </div>
+          {/* ── String type fields ── */}
+          {recordType === "string" && (
+            <>
+              <div>
+                <label className="text-xs text-[#64748b] mb-1 block">ชื่อไม้ *</label>
+                <input
+                  className="inp"
+                  placeholder="เช่น Wilson Pro Staff 97"
+                  value={form.racket}
+                  onChange={(e) => setForm({ ...form, racket: e.target.value })}
+                  autoFocus
+                />
+              </div>
 
-          {/* Strings */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-[#64748b] mb-1 block">เอ็น Main</label>
-              <input
-                className="inp"
-                placeholder="Main"
-                value={form.string1}
-                onChange={(e) => setForm({ ...form, string1: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-[#64748b] mb-1 block">เอ็น Cross</label>
-              <input
-                className="inp"
-                placeholder="Cross"
-                value={form.string2}
-                onChange={(e) => setForm({ ...form, string2: e.target.value })}
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#64748b] mb-1 block">เอ็น Main</label>
+                  <input
+                    className="inp"
+                    placeholder="Main"
+                    value={form.string1}
+                    onChange={(e) => setForm({ ...form, string1: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#64748b] mb-1 block">เอ็น Cross</label>
+                  <input
+                    className="inp"
+                    placeholder="Cross"
+                    value={form.string2}
+                    onChange={(e) => setForm({ ...form, string2: e.target.value })}
+                  />
+                </div>
+              </div>
 
-          {/* ราคา */}
-          <div>
-            <label className="text-xs text-[#64748b] mb-1 block">ราคา</label>
-            <div className="flex gap-3">
-              {([200, 300] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setForm({ ...form, price: p })}
-                  className="flex-1 py-[14px] rounded-[12px] font-bold text-lg num cursor-pointer transition-all duration-150"
+              <div>
+                <label className="text-xs text-[#64748b] mb-1 block">ราคา</label>
+                <div className="flex gap-3">
+                  {([200, 300] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setForm({ ...form, price: p })}
+                      className="flex-1 py-[14px] rounded-[12px] font-bold text-lg num cursor-pointer transition-all duration-150"
+                      style={{
+                        border: `2px solid ${form.price === p
+                          ? p === 200 ? "#22c55e" : "#f59e0b"
+                          : "rgba(255,255,255,0.1)"
+                          }`,
+                        background: form.price === p
+                          ? p === 200 ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)"
+                          : "rgba(255,255,255,0.03)",
+                        color: form.price === p
+                          ? p === 200 ? "#22c55e" : "#f59e0b"
+                          : "#64748b",
+                      }}
+                    >
+                      ฿{p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, is_new_racket: !form.is_new_racket })}
+                className="w-full py-[14px] rounded-[12px] font-medium text-sm cursor-pointer transition-all duration-150"
+                style={{
+                  border: `2px solid ${form.is_new_racket ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.1)"}`,
+                  background: form.is_new_racket ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.03)",
+                  color: form.is_new_racket ? "#f59e0b" : "#64748b",
+                }}
+              >
+                {form.is_new_racket ? "เอ็น + ค่าคอมขายไม้" : "ขึ้นเอ็นอย่างเดียว"}
+              </button>
+            </>
+          )}
+
+          {/* ── Other type fields ── */}
+          {recordType === "other" && (
+            <>
+              <div>
+                <label className="text-xs text-[#64748b] mb-1 block">ชื่อกิจกรรม *</label>
+                <select
+                  className="inp cursor-pointer"
                   style={{
-                    border: `2px solid ${form.price === p
-                      ? p === 200 ? "#22c55e" : "#f59e0b"
-                      : "rgba(255,255,255,0.1)"
-                      }`,
-                    background: form.price === p
-                      ? p === 200 ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)"
-                      : "rgba(255,255,255,0.03)",
-                    color: form.price === p
-                      ? p === 200 ? "#22c55e" : "#f59e0b"
-                      : "#64748b",
+                    backgroundColor: "#1e293b",
+                    color: "#e2e8f0",
                   }}
+                  value={form.activity_name}
+                  onChange={(e) => setForm({ ...form, activity_name: e.target.value })}
+                  autoFocus
                 >
-                  ฿{p}
-                </button>
-              ))}
-            </div>
-          </div>
+                  <option value="">-- เลือกกิจกรรม --</option>
+                  {ACTIVITY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} style={{ backgroundColor: "#1e293b", color: "#e2e8f0" }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {/* ประเภทงาน */}
-          <button
-            type="button"
-            onClick={() => setForm({ ...form, is_new_racket: !form.is_new_racket })}
-            className="w-full py-[14px] rounded-[12px] font-medium text-sm cursor-pointer transition-all duration-150"
-            style={{
-              border: `2px solid ${form.is_new_racket ? "rgba(245,158,11,0.5)" : "rgba(255,255,255,0.1)"}`,
-              background: form.is_new_racket ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.03)",
-              color: form.is_new_racket ? "#f59e0b" : "#64748b",
-            }}
-          >
-            {form.is_new_racket ? "เอ็น + ค่าคอมขายไม้" : "ขึ้นเอ็นอย่างเดียว"}
-          </button>
+              <div>
+                <label className="text-xs text-[#64748b] mb-1 block">ราคา (บาท) *</label>
+                <input
+                  className="inp"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="0"
+                  min="1"
+                  value={form.otherPrice}
+                  onChange={(e) => setForm({ ...form, otherPrice: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
-          {/* Note */}
+          {/* Note (shared) */}
           <div>
             <label className="text-xs text-[#64748b] mb-1 block">หมายเหตุ</label>
             <input

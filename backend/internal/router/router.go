@@ -53,6 +53,7 @@ func New(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		rec.GET("", h.ListRecords)
 		rec.GET("/summary/daily", h.DailySummary)
 		rec.GET("/summary/monthly", h.MonthlySummary)
+		rec.GET("/export", h.ExportRecordsExcel)
 		rec.POST("", h.CreateRecord)
 		rec.PUT("/:id", h.UpdateRecord)
 		rec.DELETE("/:id", h.DeleteRecord)
@@ -65,7 +66,10 @@ func New(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		admin.POST("/users", h.CreateUser)
 		admin.PUT("/users/:id", h.UpdateUser)
 		admin.DELETE("/users/:id", h.DeleteUser)
+		admin.POST("/users/:id/restore", h.RestoreUser)
+		admin.GET("/users/deleted", h.ListDeletedUsers)
 		admin.GET("/report", h.AdminReport)
+		admin.GET("/report/export", h.ExportReportCSV)
 	}
 
 	return r

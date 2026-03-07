@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { RecordCard } from "@/components/RecordCard";
 import { RecordForm } from "@/components/RecordForm";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -10,7 +11,9 @@ import { today, fmtDateShort, fmtMoney } from "@/lib/utils";
 import type { Record } from "@/types";
 
 export default function DailyPage() {
-  const [selDate, setSelDate] = useState(today);
+  const searchParams = useSearchParams();
+  const initialDate = searchParams.get("date") ?? today();
+  const [selDate, setSelDate] = useState(initialDate);
   const [records, setRecords] = useState<Record[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,13 +49,17 @@ export default function DailyPage() {
     loadRecords(selDate);
   }, [selDate, loadRecords]);
 
-  const dayTotal = records.reduce((s, r) => s + r.price, 0);
-  const saleCount = records.filter((r) => r.is_new_racket).length;
+  const stringRecords = records.filter((r) => r.record_type === "string");
+  const otherRecords = records.filter((r) => r.record_type === "other");
+  const stringTotal = stringRecords.reduce((s, r) => s + r.price, 0);
+  const otherTotal = otherRecords.reduce((s, r) => s + r.price, 0);
+  const dayTotal = stringTotal + otherTotal;
+  const saleCount = stringRecords.filter((r) => r.is_new_racket).length;
   const saleTotal = saleCount * 200;
 
   // ── Create ────────────────────────────────────────────────────────────────
 
-  const handleCreate = async (data: Omit<Record, "id" | "user_id" | "date" | "seq" | "created_at" | "updated_at">) => {
+  const handleCreate = async (data: Omit<Record, "id" | "user_id" | "date" | "seq" | "created_at" | "updated_at"> & { record_type: "string" | "other"; activity_name: string }) => {
     setSaving(true);
     try {
       const created = await recordsApi.create({ date: selDate, ...data });
@@ -72,7 +79,7 @@ export default function DailyPage() {
 
   // ── Update ────────────────────────────────────────────────────────────────
 
-  const handleUpdate = async (data: Omit<Record, "id" | "user_id" | "date" | "seq" | "created_at" | "updated_at">) => {
+  const handleUpdate = async (data: Omit<Record, "id" | "user_id" | "date" | "seq" | "created_at" | "updated_at"> & { record_type: "string" | "other"; activity_name: string }) => {
     if (!editRecord) return;
     setSaving(true);
     try {
@@ -156,14 +163,14 @@ export default function DailyPage() {
 
       {/* Stats */}
       {records.length > 0 && (
-        <div className={`grid gap-2 mb-4 ${saleCount > 0 ? "grid-cols-2" : "grid-cols-2"}`}>
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="stat-card">
             <div className="text-[#475569] text-[10px] font-semibold">ไม้</div>
-            <div className="num text-xl mt-1" style={{ color: "#e2e8f0" }}>{records.length}</div>
+            <div className="num text-xl mt-1" style={{ color: "#e2e8f0" }}>{stringRecords.length}</div>
           </div>
           <div className="stat-card">
-            <div className="text-[#475569] text-[10px] font-semibold">รายได้</div>
-            <div className="num text-xl mt-1" style={{ color: "#22c55e" }}>฿{fmtMoney(dayTotal)}</div>
+            <div className="text-[#475569] text-[10px] font-semibold">รายได้ขึ้นเอ็น</div>
+            <div className="num text-xl mt-1" style={{ color: "#22c55e" }}>฿{fmtMoney(stringTotal)}</div>
           </div>
           {saleCount > 0 && (
             <>
@@ -176,6 +183,24 @@ export default function DailyPage() {
                 <div className="num text-xl mt-1" style={{ color: "#f59e0b" }}>฿{fmtMoney(saleTotal)}</div>
               </div>
             </>
+          )}
+          {otherRecords.length > 0 && (
+            <>
+              <div className="stat-card">
+                <div className="text-[#475569] text-[10px] font-semibold">รายการอื่นๆ</div>
+                <div className="num text-xl mt-1" style={{ color: "#e2e8f0" }}>{otherRecords.length}</div>
+              </div>
+              <div className="stat-card">
+                <div className="text-[#475569] text-[10px] font-semibold">รายได้อื่นๆ</div>
+                <div className="num text-xl mt-1" style={{ color: "#06b6d4" }}>฿{fmtMoney(otherTotal)}</div>
+              </div>
+            </>
+          )}
+          {(otherRecords.length > 0) && (
+            <div className="stat-card col-span-2">
+              <div className="text-[#475569] text-[10px] font-semibold">รวมทั้งหมด</div>
+              <div className="num text-xl mt-1" style={{ color: "#a78bfa" }}>฿{fmtMoney(dayTotal)}</div>
+            </div>
           )}
         </div>
       )}

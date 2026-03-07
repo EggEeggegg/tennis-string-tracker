@@ -13,11 +13,13 @@ export interface Record {
   user_id: string;
   date: string; // YYYY-MM-DD
   seq: number;
+  record_type: "string" | "other";
   racket: string;
   string1: string;
   string2: string;
-  price: 200 | 300;
+  price: number;
   is_new_racket: boolean;
+  activity_name: string;
   note: string;
   created_at: string;
   updated_at: string;
@@ -26,9 +28,11 @@ export interface Record {
 export interface DaySummary {
   date: string; // YYYY-MM-DD
   count: number;
-  total: number;      // รายได้ขึ้นเอ็นรวม
-  sale_count: number; // จำนวนไม้ใหม่
-  sale_total: number; // ค่าคอมขายไม้ (sale_count * 200)
+  total: number;       // รายได้รวมทุกประเภท
+  sale_count: number;  // จำนวนไม้ใหม่
+  sale_total: number;  // ค่าคอมขายไม้ (sale_count * 200)
+  other_count: number; // จำนวน record type=other
+  other_total: number; // ยอดรายได้อื่นๆ
 }
 
 export interface MonthSummary {
@@ -37,6 +41,8 @@ export interface MonthSummary {
   total: number;
   sale_count: number;
   sale_total: number;
+  other_count: number;
+  other_total: number;
 }
 
 export interface UserReport {
@@ -49,12 +55,16 @@ export interface UserReport {
   count_300: number;
   sale_count: number;
   sale_total: number;
+  other_count: number;
+  other_total: number;
 }
 
 export interface AdminReportResponse {
   users: UserReport[];
   grand_total: number;
   grand_count: number;
+  grand_other_total: number;
+  grand_other_count: number;
   period: { start: string; end: string; as_of: string };
 }
 

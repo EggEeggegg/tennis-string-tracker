@@ -120,12 +120,14 @@
 
   /* ── FAB ───────────────────────────────── */
   .fab {
-    @apply fixed bottom-[76px] right-4 w-14 h-14 rounded-full
+    @apply fixed bottom-[92px] right-4 w-14 h-14 rounded-full
            bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white
            flex items-center justify-center text-[28px] border-none
            cursor-pointer z-[90]
            shadow-[0_4px_24px_rgba(59,130,246,0.4)]
            active:scale-90 touch-manipulation;
+    line-height: 1;
+    transform: translateY(-1px);
   }
 
   /* ── Number display ────────────────────── */

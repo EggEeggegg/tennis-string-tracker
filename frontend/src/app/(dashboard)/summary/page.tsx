@@ -72,6 +72,33 @@ function SummaryContent() {
     }
   }, [start, end]);
 
+  const exportExcel = async () => {
+    if (!start || !end) {
+      toast("กรุณาเลือกวันที่ก่อน", "error");
+      return;
+    }
+    try {
+      const res = await recordsApi.exportExcel(start, end);
+      if (!res.ok) {
+        toast("ดาวน์โหลดล้มเหลว", "error");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `tennis-records-${start}-${end}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast("ดาวน์โหลดสำเร็จ", "success");
+    } catch {
+      toast("ดาวน์โหลดล้มเหลว", "error");
+    }
+  };
+
   // load on first visit to each mode
   useEffect(() => { if (mode === "daily" && !dailyLoaded) fetchDaily(); }, [mode, dailyLoaded, fetchDaily]);
   useEffect(() => { if (mode === "monthly") fetchMonthly(); }, [mode, year, fetchMonthly]);
@@ -88,12 +115,17 @@ function SummaryContent() {
   const mCount = monthlyData.reduce((s, m) => s + m.count, 0);
 
   // filter stats
-  const fCount = records.length;
-  const fTotal = records.reduce((s, r) => s + r.price, 0);
-  const c200 = records.filter((r) => r.price === 200).length;
-  const c300 = records.filter((r) => r.price === 300).length;
-  const saleCount = records.filter((r) => r.is_new_racket).length;
+  const fStringRecords = records.filter((r) => r.record_type === "string");
+  const fOtherRecords = records.filter((r) => r.record_type === "other");
+  const fCount = fStringRecords.length;
+  const fOtherCount = fOtherRecords.length;
+  const fStringTotal = fStringRecords.reduce((s, r) => s + r.price, 0);
+  const fOtherTotal = fOtherRecords.reduce((s, r) => s + r.price, 0);
+  const c200 = fStringRecords.filter((r) => r.price === 200).length;
+  const c300 = fStringRecords.filter((r) => r.price === 300).length;
+  const saleCount = fStringRecords.filter((r) => r.is_new_racket).length;
   const saleTotal = saleCount * 200;
+  const fTotal = fStringTotal + fOtherTotal + saleTotal;
 
   const MODES: { key: Mode; icon: string; label: string }[] = [
     { key: "daily", icon: "📊", label: "รายวัน" },
@@ -167,16 +199,28 @@ function SummaryContent() {
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-sm">{fmtDate(d.date)}</div>
                       <div className="text-xs text-[#4b5e7a] mt-[2px]">
-                        {d.count} ไม้{d.sale_count > 0 && ` · ได้ค่าคอม ${d.sale_count} ไม้`}
+                        {d.count - d.other_count} ไม้
+                        {d.sale_count > 0 && ` · ได้ค่าคอม ${d.sale_count} ไม้`}
+                        {d.other_count > 0 && ` · อื่นๆ ${d.other_count} รายการ`}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
                       <div className="num text-lg" style={{ color: "#22c55e" }}>
-                        ฿{fmtMoney(d.total)}
+                        ฿{fmtMoney(d.total - d.other_total)} เอ็น
                       </div>
                       {d.sale_count > 0 && (
                         <div className="num text-xs" style={{ color: "#f59e0b" }}>
-                          ฿{fmtMoney(d.sale_total)}
+                          +฿{fmtMoney(d.sale_total)} คอม
+                        </div>
+                      )}
+                      {d.other_count > 0 && (
+                        <div className="num text-xs" style={{ color: "#06b6d4" }}>
+                          +฿{fmtMoney(d.other_total)} อื่นๆ
+                        </div>
+                      )}
+                      {(d.sale_count > 0 || d.other_count > 0) && (
+                        <div className="num text-xs font-bold" style={{ color: "#a78bfa" }}>
+                          = ฿{fmtMoney(d.total + d.sale_total)}
                         </div>
                       )}
                     </div>
@@ -188,21 +232,36 @@ function SummaryContent() {
                 className="rounded-[14px] p-[14px] mt-2"
                 style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)" }}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-bold text-sm">รวมทั้งหมด</div>
-                    <div className="text-xs text-[#64748b]">
-                      {dCount} ไม้ · {dailyData.length} วัน
-                      {dSaleTotal > 0 && ` · ได้ค่าคอม ${dailyData.reduce((s, d) => s + d.sale_count, 0)} ไม้`}
+                {(() => {
+                  const dOtherTotal = dailyData.reduce((s, d) => s + d.other_total, 0);
+                  const dOtherCount = dailyData.reduce((s, d) => s + d.other_count, 0);
+                  const dStringTotal = dTotal - dOtherTotal;
+                  const dStringCount = dCount - dOtherCount;
+                  return (
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-bold text-sm">รวมทั้งหมด</div>
+                        <div className="text-xs text-[#64748b]">
+                          {dStringCount} ไม้ · {dailyData.length} วัน
+                          {dSaleTotal > 0 && ` · ค่าคอม ${dailyData.reduce((s, d) => s + d.sale_count, 0)} ไม้`}
+                          {dOtherCount > 0 && ` · อื่นๆ ${dOtherCount} รายการ`}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(dStringTotal)} เอ็น</div>
+                        {dSaleTotal > 0 && (
+                          <div className="num text-sm" style={{ color: "#f59e0b" }}>+฿{fmtMoney(dSaleTotal)} ค่าคอม</div>
+                        )}
+                        {dOtherTotal > 0 && (
+                          <div className="num text-sm" style={{ color: "#06b6d4" }}>+฿{fmtMoney(dOtherTotal)} อื่นๆ</div>
+                        )}
+                        {dOtherTotal > 0 && (
+                          <div className="num text-sm font-bold" style={{ color: "#a78bfa" }}>= ฿{fmtMoney(dTotal)} รวม</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(dTotal)}</div>
-                    {dSaleTotal > 0 && (
-                      <div className="num text-sm" style={{ color: "#f59e0b" }}>฿{fmtMoney(dSaleTotal)} ค่าคอม</div>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </>
           )}
@@ -245,13 +304,18 @@ function SummaryContent() {
                           {MONTHS_TH[parseInt(mo) - 1]} {y}
                         </div>
                         <div className="text-xs text-[#4b5e7a] mt-[2px]">
-                          {m.count} ไม้{m.sale_count > 0 && ` · ได้ค่าคอม ${m.sale_count} ไม้`}
+                          {m.count - m.other_count} ไม้
+                          {m.sale_count > 0 && ` · ได้ค่าคอม ${m.sale_count} ไม้`}
+                          {m.other_count > 0 && ` · อื่นๆ ${m.other_count} รายการ`}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0 ml-3">
-                        <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(m.total)}</div>
+                        <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(m.total - m.other_total)} เอ็น</div>
                         {m.sale_count > 0 && (
-                          <div className="num text-sm" style={{ color: "#f59e0b" }}>+฿{fmtMoney(m.sale_total)}</div>
+                          <div className="num text-sm" style={{ color: "#f59e0b" }}>+฿{fmtMoney(m.sale_total)} คอม</div>
+                        )}
+                        {m.other_count > 0 && (
+                          <div className="num text-sm" style={{ color: "#06b6d4" }}>+฿{fmtMoney(m.other_total)} อื่นๆ</div>
                         )}
                       </div>
                     </div>
@@ -263,20 +327,36 @@ function SummaryContent() {
                 className="rounded-[14px] p-[14px] mt-2"
                 style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)" }}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-bold">รวมทั้งหมด</div>
-                    <div className="text-xs text-[#64748b]">
-                      {mCount} ไม้{mSaleTotal > 0 && ` · ได้ค่าคอม ${monthlyData.reduce((s, m) => s + m.sale_count, 0)} ไม้`}
+                {(() => {
+                  const mOtherTotal = monthlyData.reduce((s, m) => s + m.other_total, 0);
+                  const mOtherCount = monthlyData.reduce((s, m) => s + m.other_count, 0);
+                  const mStringTotal = mTotal - mOtherTotal;
+                  const mStringCount = mCount - mOtherCount;
+                  return (
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-bold">รวมทั้งหมด</div>
+                        <div className="text-xs text-[#64748b]">
+                          {mStringCount} ไม้
+                          {mSaleTotal > 0 && ` · ค่าคอม ${monthlyData.reduce((s, m) => s + m.sale_count, 0)} ไม้`}
+                          {mOtherCount > 0 && ` · อื่นๆ ${mOtherCount} รายการ`}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(mStringTotal)} เอ็น</div>
+                        {mSaleTotal > 0 && (
+                          <div className="num text-sm" style={{ color: "#f59e0b" }}>+฿{fmtMoney(mSaleTotal)} ค่าคอม</div>
+                        )}
+                        {mOtherTotal > 0 && (
+                          <div className="num text-sm" style={{ color: "#06b6d4" }}>+฿{fmtMoney(mOtherTotal)} อื่นๆ</div>
+                        )}
+                        {mOtherTotal > 0 && (
+                          <div className="num text-sm font-bold" style={{ color: "#a78bfa" }}>= ฿{fmtMoney(mTotal)} รวม</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="num text-xl" style={{ color: "#22c55e" }}>฿{fmtMoney(mTotal)}</div>
-                    {mSaleTotal > 0 && (
-                      <div className="num text-sm" style={{ color: "#f59e0b" }}>+฿{fmtMoney(mSaleTotal)} ค่าคอม</div>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </>
           )}
@@ -311,6 +391,11 @@ function SummaryContent() {
             <button className="btn-primary w-full mt-4" onClick={fetchFilter} disabled={filterLoading}>
               {filterLoading ? "กำลังโหลด…" : "ค้นหา"}
             </button>
+            {filterLoaded && (
+              <button className="btn-ghost w-full mt-2" onClick={exportExcel}>
+                📥 Export Excel
+              </button>
+            )}
           </div>
 
           {filterLoaded && (
@@ -318,7 +403,7 @@ function SummaryContent() {
               <div className="grid grid-cols-2 gap-2 mb-4 items-stretch">
                 {[
                   { label: "จำนวนไม้", value: fCount, unit: "ไม้", color: "#22c55e" },
-                  { label: "รายได้รวม", value: `฿${fmtMoney(fTotal)}`, color: "#22c55e" },
+                  { label: "รายได้ขึ้นเอ็น", value: `฿${fmtMoney(fStringTotal)}`, color: "#22c55e" },
                   { label: "ได้ค่าคอม", value: saleCount, unit: "ไม้", color: "#3b82f6" },
                   { label: "ค่าคอมรวม", value: `฿${fmtMoney(saleTotal)}`, color: "#3b82f6" },
                 ].map((s, i) => (
@@ -328,10 +413,31 @@ function SummaryContent() {
                     <div className="text-[11px] text-[#2d3a52]">{s.unit ?? "\u00A0"}</div>
                   </div>
                 ))}
+                {fOtherCount > 0 && (
+                  <>
+                    <div className="stat-card flex flex-col justify-between" style={{ animationDelay: "0.24s" }}>
+                      <div className="text-[#475569] text-[11px] font-semibold mb-1">รายการอื่นๆ</div>
+                      <div className="num text-2xl" style={{ color: "#06b6d4" }}>{fOtherCount}</div>
+                      <div className="text-[11px] text-[#2d3a52]">รายการ</div>
+                    </div>
+                    <div className="stat-card flex flex-col justify-between" style={{ animationDelay: "0.3s" }}>
+                      <div className="text-[#475569] text-[11px] font-semibold mb-1">รายได้อื่นๆ</div>
+                      <div className="num text-2xl" style={{ color: "#06b6d4" }}>฿{fmtMoney(fOtherTotal)}</div>
+                      <div className="text-[11px] text-[#2d3a52]">&nbsp;</div>
+                    </div>
+                  </>
+                )}
+                {fOtherCount > 0 && (
+                  <div className="stat-card col-span-2 flex flex-col justify-between" style={{ animationDelay: "0.36s" }}>
+                    <div className="text-[#475569] text-[11px] font-semibold mb-1">รายได้รวมทุกประเภท</div>
+                    <div className="num text-2xl" style={{ color: "#a78bfa" }}>฿{fmtMoney(fTotal)}</div>
+                    <div className="text-[11px] text-[#2d3a52]">&nbsp;</div>
+                  </div>
+                )}
               </div>
 
               <div className="card">
-                <h4 className="font-bold text-sm mb-3">แยกตามราคา</h4>
+                <h4 className="font-bold text-sm mb-3">แยกตามราคาขึ้นเอ็น</h4>
                 <div className="flex gap-[10px]">
                   <div
                     className="flex-1 p-[14px] rounded-[12px]"
