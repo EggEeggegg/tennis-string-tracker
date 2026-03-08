@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { NavBar } from "@/components/NavBar";
 import { ToastContainer } from "@/components/Toast";
 import { getToken, getStoredUser, clearAuth } from "@/lib/utils";
-import { authApi } from "@/lib/api";
+import { healthApi, authApi } from "@/lib/api";
 import type { User } from "@/types";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // Wake up Render backend on cold start
+    healthApi.check().catch(() => {});
+
     const token = getToken();
     if (!token) {
       router.replace("/login");

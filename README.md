@@ -7,14 +7,14 @@
 | Layer    | Technology                        |
 |----------|-----------------------------------|
 | Frontend | Next.js 14 (App Router, TypeScript, Tailwind CSS) |
-| Backend  | Go 1.22 + Gin + GORM              |
-| Database | PostgreSQL (Neon.tech)            |
-| Auth     | JWT (HS256) + bcrypt              |
+| Backend  | Go 1.24 + Gin + GORM + pgx        |
+| Database | PostgreSQL (Neon.tech) + Excelize |
+| Auth     | JWT (HS256) + bcrypt (cost 12)    |
 
 ## Quick Start
 
 ### Prerequisites
-- Go 1.22+
+- Go 1.24+
 - Node.js 20+
 - PostgreSQL database (สมัคร [Neon.tech](https://neon.tech) ฟรี)
 
@@ -97,24 +97,28 @@ npm run dev  # start dev server (port 3000)
 | PUT    | /api/admin/users/:id| JWT+Admin  | แก้ไข / toggle user |
 | DELETE | /api/admin/users/:id| JWT+Admin  | ลบ user             |
 | GET    | /api/admin/report   | JWT+Admin  | Report รวมทุก user  |
+| POST   | /api/records/export | JWT       | Export CSV/Excel    |
 
 ## Project Structure
 
 ```
 tennis-tracker/
+├── docs/
+│   └── architecture.md        ← full system architecture
 ├── backend/
 │   ├── cmd/
-│   │   ├── server/main.go     ← entry point (HTTP server)
+│   │   ├── server/main.go     ← entry point (HTTP server + graceful shutdown)
 │   │   └── seed/main.go       ← seed admin user
 │   ├── internal/
 │   │   ├── config/config.go   ← env config
 │   │   ├── database/          ← GORM connection
-│   │   ├── handler/           ← HTTP handlers (auth, records, admin)
+│   │   ├── handler/           ← HTTP handlers (auth, records, admin, export)
 │   │   ├── middleware/        ← JWT auth, admin-only
-│   │   ├── model/             ← GORM models (User, Record)
-│   │   └── router/router.go   ← Gin router setup
+│   │   ├── model/             ← GORM models (User, Record) + DTOs
+│   │   └── router/router.go   ← Gin router setup + CORS
 │   ├── migrations/
-│   │   └── 001_init.sql       ← DB schema
+│   │   ├── 001_init.sql       ← DB schema + triggers
+│   │   └── 002_add_record_type.sql ← type column (string | sale)
 │   ├── go.mod
 │   ├── Makefile
 │   └── .env.example
@@ -122,11 +126,12 @@ tennis-tracker/
     ├── src/
     │   ├── app/               ← Next.js App Router pages
     │   │   ├── login/         ← หน้า login
-    │   │   └── (dashboard)/   ← daily, summary, monthly, filter, admin
-    │   ├── components/        ← Toast, ConfirmDialog, RecordForm, etc.
-    │   ├── lib/               ← api client, utils
-    │   └── types/             ← TypeScript types
-    ├── next.config.ts
+    │   │   └── (dashboard)/   ← daily, summary, filter, admin
+    │   ├── components/        ← NavBar, Toast, ConfirmDialog, RecordForm, etc.
+    │   ├── lib/               ← api client (authApi, recordsApi, adminApi), utils
+    │   └── types/             ← TypeScript types (User, Record, DaySummary, etc.)
+    ├── next.config.ts         ← proxy /api/* → backend
+    ├── tailwind.config.ts
     └── .env.example
 ```
 

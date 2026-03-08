@@ -2,8 +2,8 @@
 
 ## Tech Stack
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind CSS → Deploy Vercel
-- **Backend**: Go 1.22 + Gin + pgx/v5 → Deploy Railway / Render
-- **Database**: PostgreSQL (Neon.tech)
+- **Backend**: Go 1.24 + Gin + GORM + pgx → Deploy Railway / Render
+- **Database**: PostgreSQL (Neon.tech) + Excelize (CSV/Excel export)
 - **Auth**: JWT (golang-jwt/jwt/v5) + bcrypt (cost 12)
 
 ## โครงสร้างไฟล์
@@ -22,17 +22,17 @@ tennis-tracker/
 │   │   └── seed/main.go             ← สร้าง admin user (make seed)
 │   └── internal/
 │       ├── config/config.go         ← Load env vars (mustEnv / getEnv)
-│       ├── database/database.go     ← pgxpool.Pool with connection settings
+│       ├── database/database.go     ← GORM DB instance + connection settings
 │       ├── model/
-│       │   ├── user.go              ← User struct + input types
-│       │   └── record.go            ← Record struct + input types + summary types
+│       │   ├── user.go              ← User GORM struct + input types (DTO)
+│       │   └── record.go            ← Record GORM struct + input types + summary types
 │       ├── middleware/
 │       │   └── auth.go              ← Auth() + AdminOnly() Gin middleware, Claims struct
 │       ├── handler/
 │       │   ├── handler.go           ← Handler struct{db, cfg}
 │       │   ├── auth.go              ← Login, Me, ChangePassword
 │       │   ├── records.go           ← ListRecords, CreateRecord, UpdateRecord, DeleteRecord
-│       │   │                           DailySummary, MonthlySummary
+│       │   │                           DailySummary, MonthlySummary, ExportCSV/Excel
 │       │   └── admin.go             ← ListUsers, CreateUser, UpdateUser, DeleteUser, AdminReport
 │       └── router/router.go         ← Gin engine + CORS + all routes
 │
@@ -137,9 +137,9 @@ npm run build && npm run start # production
 - CORS ต้อง whitelist เฉพาะ frontend URL
 
 ## สถานะปัจจุบัน
-- [x] Backend Go: Auth, Records CRUD, Admin CRUD, graceful shutdown
-- [x] Migration 002: record type (string / sale)
-- [x] Frontend Next.js: Login, Daily, Summary (รวม filter), Admin
+- [x] Backend Go: Auth, Records CRUD, Admin CRUD, graceful shutdown, CSV/Excel export
+- [x] Migration 002: record type (string | sale)
+- [x] Frontend Next.js: Login, Daily, Summary (รวม filter), Admin, rate limiting
+- [x] Database schema: users + records + updated_at triggers
 - [ ] Deploy backend (Railway / Render)
 - [ ] Deploy frontend (Vercel)
-- [ ] Export feature (Excel/PDF) — Phase 3

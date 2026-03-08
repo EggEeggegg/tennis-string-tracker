@@ -36,6 +36,12 @@ async function request<T>(
   return data as T;
 }
 
+// ─── Health ───────────────────────────────────────────────────────────────────
+
+export const healthApi = {
+  check: () => request<{ status: string; time: string }>("/api/health"),
+};
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const authApi = {

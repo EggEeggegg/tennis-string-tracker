@@ -78,8 +78,8 @@
 | Layer    | Technology                        | Hosting        |
 |----------|-----------------------------------|----------------|
 | Frontend | Next.js 14 App Router + TypeScript + Tailwind CSS | Vercel |
-| Backend  | Go 1.22 + Gin + pgx/v5            | Railway/Render |
-| Database | PostgreSQL                        | Neon.tech      |
+| Backend  | Go 1.24 + Gin + GORM + pgx        | Railway/Render |
+| Database | PostgreSQL + Excelize (export)    | Neon.tech      |
 | Auth     | JWT (golang-jwt/jwt/v5) + bcrypt (cost 12) | —       |
 
 ## User Flow
@@ -106,10 +106,10 @@ tennis-tracker/
 │   ├── cmd/seed/main.go            ← สร้าง admin user
 │   ├── internal/
 │   │   ├── config/config.go        ← env vars
-│   │   ├── database/database.go    ← pgxpool connection
+│   │   ├── database/database.go    ← GORM DB instance
 │   │   ├── middleware/auth.go      ← JWT middleware, Claims struct
-│   │   ├── model/                  ← User, Record structs
-│   │   ├── handler/                ← auth, records, admin handlers
+│   │   ├── model/                  ← User, Record (GORM) + DTOs
+│   │   ├── handler/                ← auth, records, admin, export handlers
 │   │   └── router/router.go        ← Gin routes + CORS
 │   └── migrations/
 │       ├── 001_init.sql            ← schema + triggers
@@ -161,7 +161,9 @@ NEXT_PUBLIC_API_URL=https://your-api.railway.app
 - [x] Backend Go: Auth, Records CRUD, Admin CRUD, graceful shutdown
 - [x] Frontend Next.js: Login, Daily, Summary, Filter→Summary, Admin
 - [x] Database schema: users + records + updated_at triggers
-- [x] Migration 002: record type (string / sale)
+- [x] Migration 002: record type (string | sale)
+- [x] CSV/Excel export via Excelize
+- [x] Rate limiting on frontend
 - [ ] Deploy backend (Railway / Render)
 - [ ] Deploy frontend (Vercel)
-- [ ] Export feature (Excel/PDF) — Phase 3
+- [ ] PDF export (Phase 3)
