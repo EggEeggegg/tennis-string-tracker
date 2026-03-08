@@ -277,7 +277,7 @@ func (h *Handler) MonthlySummary(c *gin.Context) {
 	}
 	sql += " GROUP BY TO_CHAR(date, 'YYYY-MM') ORDER BY month DESC"
 
-	var result []model.MonthSummary
+	result := []model.MonthSummary{}
 	if err := h.db.Raw(sql, args...).Scan(&result).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query monthly summary"})
 		return

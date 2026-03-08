@@ -53,7 +53,7 @@ function SummaryContent() {
     setMonthlyLoading(true);
     recordsApi
       .monthlySummary({ year })
-      .then(setMonthlyData)
+      .then((data) => setMonthlyData(data || []))
       .catch(() => toast("โหลดข้อมูลล้มเหลว", "error"))
       .finally(() => setMonthlyLoading(false));
   }, [year]);
@@ -307,6 +307,7 @@ function SummaryContent() {
                           {m.count - m.other_count} ไม้
                           {m.sale_count > 0 && ` · ได้ค่าคอม ${m.sale_count} ไม้`}
                           {m.other_count > 0 && ` · อื่นๆ ${m.other_count} รายการ`}
+                          {` · รวม ฿${fmtMoney(m.total + m.sale_total)}`}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0 ml-3">
@@ -316,6 +317,11 @@ function SummaryContent() {
                         )}
                         {m.other_count > 0 && (
                           <div className="num text-sm" style={{ color: "#06b6d4" }}>+฿{fmtMoney(m.other_total)} อื่นๆ</div>
+                        )}
+                        {(m.sale_count > 0 || m.other_count > 0) && (
+                          <div className="num text-sm font-bold" style={{ color: "#a78bfa" }}>
+                            = ฿{fmtMoney(m.total)}
+                          </div>
                         )}
                       </div>
                     </div>
