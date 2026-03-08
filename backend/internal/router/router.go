@@ -21,6 +21,9 @@ func New(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
+	// Global rate limit: 100 requests/min per IP (covers all /api/* routes)
+	r.Use(middleware.RateLimit(100, time.Minute))
+
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.CORSOrigin},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -42,7 +45,8 @@ func New(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	// ── Auth ─────────────────────────────────────────────────────────────────
 	authGroup := api.Group("/auth")
 	{
-		authGroup.POST("/login", h.Login)
+		// Stricter limit on login: 10 requests/min per IP (brute-force protection)
+		authGroup.POST("/login", middleware.RateLimit(10, time.Minute), h.Login)
 		authGroup.GET("/me", auth, h.Me)
 		authGroup.POST("/change-password", auth, h.ChangePassword)
 	}
