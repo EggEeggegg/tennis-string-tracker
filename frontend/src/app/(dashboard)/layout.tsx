@@ -15,7 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     // Wake up Render backend on cold start
-    healthApi.check().catch(() => {});
+    // healthApi.check().catch(() => {});
 
     const token = getToken();
     if (!token) {
