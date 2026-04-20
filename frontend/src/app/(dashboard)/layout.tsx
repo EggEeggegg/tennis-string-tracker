@@ -5,18 +5,16 @@ import { useRouter } from "next/navigation";
 import { NavBar } from "@/components/NavBar";
 import { ToastContainer } from "@/components/Toast";
 import { getToken, getStoredUser, clearAuth } from "@/lib/utils";
-import { healthApi, authApi } from "@/lib/api";
+import { authApi } from "@/lib/api";
 import type { User } from "@/types";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
+  const [isColdStart, setIsColdStart] = useState(false);
 
   useEffect(() => {
-    // Wake up Render backend on cold start
-    // healthApi.check().catch(() => {});
-
     const token = getToken();
     if (!token) {
       router.replace("/login");
@@ -27,24 +25,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const stored = getStoredUser();
     if (stored) setUser(stored);
 
-    // Verify token is still valid with server
-    authApi
-      .me()
-      .then((u) => {
-        setUser(u);
-        localStorage.setItem("tennis-tracker-user", JSON.stringify(u));
-        setReady(true);
-      })
-      .catch(() => {
-        clearAuth();
-        router.replace("/login");
-      });
+    let retryTimer: NodeJS.Timeout;
+
+    const verifyAuth = () => {
+      // Show "waking up" message if it takes more than 3 seconds
+      const coldStartTimer = setTimeout(() => setIsColdStart(true), 3000);
+
+      authApi
+        .me()
+        .then((u) => {
+          clearTimeout(coldStartTimer);
+          setIsColdStart(false);
+          setUser(u);
+          localStorage.setItem("tennis-tracker-user", JSON.stringify(u));
+          setReady(true);
+        })
+        .catch((err: Error) => {
+          clearTimeout(coldStartTimer);
+          // If 401 (Unauthorized), user MUST login again
+          if (err.message.includes("401")) {
+            clearAuth();
+            router.replace("/login");
+            return;
+          }
+
+          // For other errors (like 502, 504 from Render during cold start), 
+          // just wait and retry instead of booting the user out.
+          console.warn("Server might be waking up... retrying in 5s", err);
+          setIsColdStart(true);
+          retryTimer = setTimeout(verifyAuth, 5000);
+        });
+    };
+
+    verifyAuth();
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [router]);
 
   if (!ready && !user) {
     return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <div className="text-[#374560] text-sm">กำลังโหลด…</div>
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-3">
+        <div className="text-[#374560] text-sm font-medium animate-pulse">
+          {isColdStart ? "☕️ กำลังปลุกเซิร์ฟเวอร์ (อาจใช้เวลาประมาณ 1 นาที)..." : "กำลังโหลด…"}
+        </div>
+        {isColdStart && (
+          <div className="text-[12px] text-[#64748b] max-w-[200px] text-center leading-relaxed">
+            เซิร์ฟเวอร์ตัวฟรีของ Render อาจหลับอยู่ ระบบกำลังปลุกให้อย่างต่อเนื่องครับ
+          </div>
+        )}
       </div>
     );
   }
